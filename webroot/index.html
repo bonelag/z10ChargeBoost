@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Charge Boost Console</title>
+<title>Bảng điều khiển tăng tốc sạc</title>
 <style>
 /* ============================================================
    iQOO Z10 Turbo+ 充电加速 · 控制台样式（V2507A 原生适配）
@@ -252,6 +252,28 @@ code{
   white-space:normal;
   overflow-wrap:anywhere;
   word-break:break-word;
+}
+
+/* Nút chuyển ngôn ngữ + vòng tròn trạng thái */
+.mi-head-right{
+  display:flex;align-items:center;gap:8px;
+  flex:none;position:relative;z-index:1;
+}
+.lang-sw{
+  display:inline-flex;align-items:center;padding:2px;
+  border-radius:999px;background:var(--card-2);
+  border:1px solid var(--line);
+}
+.lang-btn{
+  appearance:none;-webkit-appearance:none;border:0;
+  background:transparent;color:var(--t2);
+  font-family:inherit;font-size:11px;font-weight:700;
+  padding:4px 8px;border-radius:999px;cursor:pointer;line-height:1.2;
+  transition:background .18s var(--ease),color .18s var(--ease);
+}
+.lang-btn.on{
+  color:#fff;background:var(--accent-grad);
+  box-shadow:0 2px 8px -2px var(--nav-accent-glow);
 }
 
 /* 圆环状态图标 */
@@ -1675,63 +1697,61 @@ code{
 <div class="mi-head" id="miHead">
   <div class="mi-status" id="svcCard">
     <div style="flex:1;min-width:0">
-      <div class="mi-title" id="miTitle">Loading</div>
-      <div class="mi-sub" id="miSub">Charge Boost Service</div>
+      <div class="mi-title" id="miTitle">Đang tải</div>
+      <div class="mi-sub" id="miSub" data-i18n="subTitle">Dịch vụ tăng tốc sạc</div>
       <!-- Keep element references for legacy JS updates -->
       <span class="dot2 ok" id="dotSvc" style="display:none"></span>
-      <span style="display:none"><b id="svcTxt">Loading</b></span>
+      <span style="display:none"><b id="svcTxt">Đang tải</b></span>
     </div>
-    <!-- 状态圆环：底圈 + 进度圈 + 对勾/叉号
-         【为什么用 SVG circle 的 stroke 画圆环】
-           见 CSS 里 .stc 的注释：stroke-dasharray 能做"画圈"动画，
-           这是录屏里那种细腻感的来源，border 做不到。 -->
-    <div class="stc anim-in" id="stCircle">
-      <svg viewBox="0 0 48 48" fill="none"
-           stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round">
-        <circle class="ring-bg" cx="24" cy="24" r="22"/>
-        <circle class="ring-fg" cx="24" cy="24" r="22"/>
-        <path class="p-ok"  d="M15.5 24.8 21.4 30.6 32.6 18.4"
-              stroke="currentColor" stroke-width="3.6"/>
-        <path class="p-bad" d="M17.5 17.5 30.5 30.5M30.5 17.5 17.5 30.5"
-              stroke="currentColor" stroke-width="3.6"/>
-      </svg>
+    <div class="mi-head-right">
+      <div class="lang-sw" id="langSw" role="group" aria-label="Language">
+        <button type="button" class="lang-btn on" data-lang="vi">Việt</button>
+        <button type="button" class="lang-btn" data-lang="en">Eng</button>
+      </div>
+      <!-- 状态圆环：底圈 + 进度圈 + 对勾/叉号 -->
+      <div class="stc anim-in" id="stCircle">
+        <svg viewBox="0 0 48 48" fill="none"
+             stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle class="ring-bg" cx="24" cy="24" r="22"/>
+          <circle class="ring-fg" cx="24" cy="24" r="22"/>
+          <path class="p-ok"  d="M15.5 24.8 21.4 30.6 32.6 18.4"
+                stroke="currentColor" stroke-width="3.6"/>
+          <path class="p-bad" d="M17.5 17.5 30.5 30.5M30.5 17.5 17.5 30.5"
+                stroke="currentColor" stroke-width="3.6"/>
+        </svg>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- ============================================================
-     第 1 页 · 状态
+     Page 1 · Home
      ============================================================ -->
 <div class="mi-page on" id="page1">
 
   <div class="errbox" id="errbox"></div>
 
-  <!-- 首次安装基线抓取提示（原 capbox，保留给 JS 用） -->
   <div class="capbox" id="capbox" style="display:none"></div>
 
-  <!-- 不干预原因提示条（原 whyBar，保留 id 给 JS 用） -->
   <div class="whybar" id="whyBar" style="display:none"></div>
 
-  <!-- ============================================================
-       机型适配卡 —— iQOO Z10 Turbo+ (V2507A / MT6991) 原生适配
-       ============================================================ -->
   <div class="mi-card devinfo">
     <div class="devinfo-head">
-      <span class="devinfo-badge">Native</span>
+      <span class="devinfo-badge" data-i18n="nativeBadge">Hỗ trợ gốc</span>
       <span class="devinfo-title">iQOO Z10 Turbo+</span>
     </div>
     <div class="devinfo-sub">V2507A · Dimensity 9400+ (MT6991) · Android 15</div>
     <div class="devinfo-grid">
       <div class="devinfo-cell">
-        <div class="devinfo-k">Theoretical Peak</div>
+        <div class="devinfo-k" data-i18n="peakTheory">Đỉnh lý thuyết</div>
         <div class="devinfo-v">70<small>W</small></div>
       </div>
       <div class="devinfo-cell">
-        <div class="devinfo-k">Current Limit</div>
+        <div class="devinfo-k" data-i18n="curLimit">Giới hạn dòng</div>
         <div class="devinfo-v"><span id="dvCap">15600</span><small>mA</small></div>
       </div>
       <div class="devinfo-cell">
-        <div class="devinfo-k">Inject Channel</div>
+        <div class="devinfo-k" data-i18n="injectChan">Kênh điều khiển</div>
         <div class="devinfo-v devinfo-v-txt" id="dvChan">—</div>
       </div>
     </div>
@@ -1741,42 +1761,42 @@ code{
   <div class="mi-hero">
     <div class="mi-hero-2col">
       <div class="col-l">
-        <div class="hl-k" id="pwLabel">Battery Power</div>
+        <div class="hl-k" id="pwLabel" data-i18n="battPower">Công suất pin</div>
         <div class="hl-v" id="vPower">—<small>W</small></div>
         <div class="hl-s" id="pSub">—</div>
       </div>
       <div class="col-r">
-        <div class="rk">Battery Temp</div>
+        <div class="rk" data-i18n="battTemp">Nhiệt độ pin</div>
         <div class="rv" id="vTemp">—<small>°C</small></div>
         <!-- Kept hidden for JS references -->
         <div class="mi-bar off" id="barTemp" style="display:none"><i id="bTemp" style="width:0%"></i></div>
-        <div class="rs" id="tSub">Board — · Batt —</div>
+        <div class="rs" id="tSub">Bo — · Pin —</div>
       </div>
     </div>
   </div>
 
   <div class="mi-sec">
-    <span>Live Monitor</span>
+    <span data-i18n="liveMonitor">Theo dõi trực tiếp</span>
     <span class="upd" id="updTxt">—</span>
   </div>
 
   <div class="mi-card">
     <div class="mi-grid">
       <div class="cell">
-        <div class="ck">Battery SOC</div>
+        <div class="ck" data-i18n="battSoc">Mức pin SOC</div>
         <div class="cv" id="vSoc">—<small>%</small></div>
         <div class="mi-bar off" id="barSoc" style="width:100%"><i id="bSoc" style="width:0%"></i></div>
       </div>
       <div class="cell">
-        <div class="ck">Battery Volt</div>
+        <div class="ck" data-i18n="battVolt">Điện áp pin</div>
         <div class="cv" id="vVbat">—<small>V</small></div>
       </div>
       <div class="cell">
-        <div class="ck">Battery Curr</div>
+        <div class="ck" data-i18n="battCurr">Dòng điện pin</div>
         <div class="cv" id="vIbat">—<small>A</small></div>
       </div>
       <div class="cell">
-        <div class="ck">Input Volt</div>
+        <div class="ck" data-i18n="inputVolt">Áp đầu vào</div>
         <div class="cv" id="vChgV">—<small>V</small></div>
       </div>
     </div>
@@ -1785,26 +1805,24 @@ code{
   <!-- Node & sensor metadata line -->
   <div class="hint" id="metaHint" style="margin:2px 6px 0">—</div>
 
-  <!-- ============================================================
-       Current parameters explanation (V2507A Native DT model)
-       ============================================================ -->
+  <!-- Current parameters explanation (V2507A Native DT model) -->
   <div class="mi-card note">
     <div class="caprow" style="margin-bottom:7px">
-      <span class="caprow-k">Device DT Limit</span>
+      <span class="caprow-k" data-i18n="dtLimitLbl">Giới hạn DT máy</span>
       <span class="caprow-v"><span id="capDt">15600</span> mA</span>
     </div>
     <div class="caprow" style="margin-bottom:7px">
-      <span class="caprow-k">Total Current Limit</span>
-      <span class="caprow-v"><span id="capNow">15600</span> mA<span class="caprow-x" id="capMode">Request Limit</span></span>
+      <span class="caprow-k" data-i18n="totalLimitLbl">Tổng giới hạn dòng</span>
+      <span class="caprow-v"><span id="capNow">15600</span> mA<span class="caprow-x" id="capMode">Mức yêu cầu</span></span>
     </div>
     <div class="caprow" style="margin-bottom:9px">
-      <span class="caprow-k">After Thermal Derate</span>
-      <span class="caprow-v"><span id="capW">15600</span> mA<span class="caprow-x">Batt peak ≈ <span id="capWin">70</span> W</span></span>
+      <span class="caprow-k" data-i18n="afterThermLbl">Sau giảm theo nhiệt</span>
+      <span class="caprow-v"><span id="capW">15600</span> mA<span class="caprow-x"><span data-i18n="battPeakPrefix">Đỉnh pin ≈ </span><span id="capWin">70</span> W</span></span>
     </div>
-    <div style="font-size:11px;color:var(--t3);line-height:1.6;padding-top:8px;border-top:1px solid var(--line)">
-      Injected = <b>Limit × Thermal Derate</b> (97/91/81/72/63%).<br>
-      Directly overrides <b>DCHG_FCC</b> via <code>vfcs_class/fchg_fcc_ma</code>, bypassing stock thermal/screen-on limits;
-      actual output remains bounded by charger protocol (FlashCharge 15.6A / PPS 10A / UFCS 8A) and adapter PDO max.
+    <div style="font-size:11px;color:var(--t3);line-height:1.6;padding-top:8px;border-top:1px solid var(--line)" data-i18n-html="noteFormulaHtml">
+      Giá trị ghi = <b>Tổng giới hạn × Giảm theo nhiệt</b> (97/91/81/72/63%).<br>
+      Chiếm quyền trực tiếp <b>DCHG_FCC</b> qua <code>vfcs_class/fchg_fcc_ma</code>, bỏ qua hãm nhiệt/sáng màn hình mặc định;
+      công suất thực tế vẫn phụ thuộc giao thức sạc (FlashCharge 15.6A / PPS 10A / UFCS 8A) và PDO củ sạc.
     </div>
   </div>
 
@@ -1814,48 +1832,48 @@ code{
   <div id="mTemp" style="display:none"></div>
 
   <!-- ---------- Boost Toggle (Temporary Pause / Resume) ---------- -->
-  <div class="mi-sec">Temporary Pause</div>
+  <div class="mi-sec" data-i18n="tempPauseSec">Tạm ngưng</div>
 
   <div class="mi-card">
-    <div style="font-size:12.5px;color:var(--dim);line-height:1.6;margin-bottom:12px">
-      Clears all overrides while <b>keeping config</b> across reboots. Ideal for slow or car chargers.
+    <div style="font-size:12.5px;color:var(--dim);line-height:1.6;margin-bottom:12px" data-i18n-html="tempPauseDesc">
+      Gỡ toàn bộ can thiệp nhưng vẫn <b>giữ nguyên cấu hình</b> qua lần khởi động lại. Phù hợp khi cắm sạc chậm / trên xe.
     </div>
     <div class="mi-btn-row">
-      <button class="mi-btn" id="btnPause">Pause Boost</button>
-      <button class="mi-btn primary" id="btnResume">Resume Boost</button>
+      <button class="mi-btn" id="btnPause" data-i18n="btnPause">Tạm ngưng sạc nhanh</button>
+      <button class="mi-btn primary" id="btnResume" data-i18n="btnResume">Tiếp tục tăng tốc</button>
     </div>
     <div id="pauseStat" class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.7;
          padding-top:10px;border-top:1px solid var(--card-3)"></div>
   </div>
 
   <!-- ---------- Restore Stock + Diagnostics ---------- -->
-  <div class="mi-sec">Maintenance</div>
+  <div class="mi-sec" data-i18n="maintSec">Bảo trì</div>
 
   <div class="mi-card pad">
-    <div style="font-size:12.5px;color:var(--dim);line-height:1.6;margin-bottom:12px">
-      Restore Stock: clears all overrides and switches to Stock profile (stays inactive after reboot). <b>Keeps config and module installed.</b><br>
-      Unlike Pause Boost, re-enabling boost requires selecting a profile again.
+    <div style="font-size:12.5px;color:var(--dim);line-height:1.6;margin-bottom:12px" data-i18n-html="restoreDesc">
+      Khôi phục gốc: gỡ toàn bộ can thiệp và chuyển về cấu hình Nguyên bản (không tự chạy lại sau khi khởi động lại). <b>Không xoá cấu hình hay gỡ module.</b><br>
+      Khác với Tạm ngưng: muốn bật lại tăng tốc cần chọn lại cấu hình.
     </div>
-    <button class="mi-btn danger" id="btnRestore" style="width:100%">Restore Stock</button>
+    <button class="mi-btn danger" id="btnRestore" style="width:100%" data-i18n="btnRestore">Khôi phục gốc</button>
 
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--card-3)">
       <div class="switchrow">
         <div>
-          <div style="font-size:13.5px;font-weight:600">Record Runtime Log</div>
-          <div style="font-size:11.5px;color:var(--dim);margin-top:2px">
-            Writes to /data/adb, auto-rotates at 256KB
+          <div style="font-size:13.5px;font-weight:600" data-i18n="recLogTitle">Ghi nhật ký chạy</div>
+          <div style="font-size:11.5px;color:var(--dim);margin-top:2px" data-i18n="recLogSub">
+            Ghi vào /data/adb, tự xoay vòng khi quá 256KB
           </div>
         </div>
         <div class="pillrow" id="logEnRow">
-          <button class="pill on" data-le="0" id="logEnOff">Off</button>
-          <button class="pill"    data-le="1" id="logEnOn">On</button>
+          <button class="pill on" data-le="0" id="logEnOff" data-i18n="off">Tắt</button>
+          <button class="pill"    data-le="1" id="logEnOn" data-i18n="on">Bật</button>
         </div>
       </div>
-      <button class="mi-btn" id="btnLogDump" style="width:100%;margin-top:12px">Export Debug Bundle</button>
+      <button class="mi-btn" id="btnLogDump" style="width:100%;margin-top:12px" data-i18n="btnLogDump">Xuất gói chẩn đoán</button>
       <div id="logDumpOut" style="font-size:12px;color:var(--dim);line-height:1.5;margin-top:8px;white-space:pre-wrap;word-break:break-all"></div>
 
       <!-- ★ v3570：One-tap health check -->
-      <button class="mi-btn primary" id="btnHealth" style="width:100%;margin-top:12px">Check CPU / Health</button>
+      <button class="mi-btn primary" id="btnHealth" style="width:100%;margin-top:12px" data-i18n="btnHealth">Kiểm tra CPU / Sức khoẻ</button>
       <div id="healthOut" style="margin-top:10px"></div>
     </div>
   </div>
@@ -1867,49 +1885,49 @@ code{
      ============================================================ -->
 <div class="mi-page" id="page2">
 
-  <div class="mi-sec">Boost Profile</div>
+  <div class="mi-sec" data-i18n="profileSec">Cấu hình sạc</div>
 
   <div class="mi-card pad">
     <div class="mi-seg" id="gearSeg">
-      <button class="tab" data-a="1">Aggressive<small>Fastest</small></button>
-      <button class="tab" data-a="2">Balanced<small>Cooler</small></button>
-      <button class="tab" data-a="3">Stock<small>Off</small></button>
+      <button class="tab" data-a="1"><span data-i18n="prof1">Siêu tốc</span><small data-i18n="prof1Sub">Nhanh nhất</small></button>
+      <button class="tab" data-a="2"><span data-i18n="prof2">Cân bằng</span><small data-i18n="prof2Sub">Mát hơn</small></button>
+      <button class="tab" data-a="3"><span data-i18n="prof3">Nguyên bản</span><small data-i18n="prof3Sub">Tắt</small></button>
     </div>
-    <div class="hint" id="gearHint">
-      Takes effect ~2s after switching. "Stock" hands control back; select a boost profile to re-enable.<br>
-      For temporary pause, use Pause Boost on Home.
+    <div class="hint" id="gearHint" data-i18n-html="gearHintDefault">
+      Có hiệu lực sau ~2 giây. "Nguyên bản" trả quyền lại hệ thống; chọn cấu hình tăng tốc để bật lại.<br>
+      Muốn tạm ngưng nhanh, dùng nút Tạm ngưng ở Trang chủ.
     </div>
   </div>
 
-  <div class="mi-sec">Current Settings</div>
+  <div class="mi-sec" data-i18n="currSettingsSec">Thiết lập dòng</div>
 
   <div class="mi-card pad">
     <div id="votHint" class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.6;margin-bottom:12px"></div>
 
     <div class="votrow">
-      <div class="votlabel">Total Current Limit<span class="votunit">mA</span></div>
+      <div class="votlabel"><span data-i18n="totalLimitLbl">Tổng giới hạn dòng</span><span class="votunit">mA</span></div>
       <input type="text" id="votIbat" inputmode="numeric" pattern="[0-9]*"
              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
              maxlength="5" min="1000" max="15600" step="100">
     </div>
-    <div class="votnote">
-      Injected = <b>Limit × Thermal Derate</b>, not a constant current.<br>
-      Default <b id="votIbatDef">15600</b> mA = <b>Device DT Calibration</b> (vivo,fchg-curr-max-ma = 15600).<br>
-      <b>15600 × 4.50V ≈ 70.2W is theoretical battery ceiling</b>;
-       actual power depends on adapter protocol & PDO max current.
+    <div class="votnote" data-i18n-html="votNoteHtml">
+      Giá trị ghi = <b>Giới hạn × Giảm theo nhiệt</b>, không phải dòng cố định.<br>
+      Mặc định <b id="votIbatDef">15600</b> mA = <b>Chuẩn DT gốc máy</b> (vivo,fchg-curr-max-ma = 15600).<br>
+      <b>15600 × 4.50V ≈ 70.2W là ngưỡng trần lý thuyết phía pin</b>;
+       công suất thực tế phụ thuộc giao thức và dòng PDO của củ sạc.
     </div>
 
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--card-3)">
       <div class="switchrow">
         <div>
-          <div style="font-size:13.5px;font-weight:600">Hardware Direct Control</div>
-          <div style="font-size:11.5px;color:var(--dim);margin-top:2px">
-            Takes over DCHG_FCC directly via vfcs_class (VFCS_CLASS_EVENT)
+          <div style="font-size:13.5px;font-weight:600" data-i18n="hwDirectTitle">Điều khiển phần cứng trực tiếp</div>
+          <div style="font-size:11.5px;color:var(--dim);margin-top:2px" data-i18n="hwDirectSub">
+            Chiếm quyền DCHG_FCC trực tiếp qua vfcs_class (VFCS_CLASS_EVENT)
           </div>
         </div>
         <div class="pillrow" id="votModeRow">
-          <button class="pill on"  data-vm="0" id="votModeOff">Off</button>
-          <button class="pill"     data-vm="1" id="votModeOn">On</button>
+          <button class="pill on"  data-vm="0" id="votModeOff" data-i18n="off">Tắt</button>
+          <button class="pill"     data-vm="1" id="votModeOn" data-i18n="on">Bật</button>
         </div>
       </div>
     </div>
@@ -1918,10 +1936,10 @@ code{
   </div>
 
   <div class="mi-btn-row">
-    <button class="mi-btn primary" id="btnVotSave" disabled>Save</button>
+    <button class="mi-btn primary" id="btnVotSave" disabled data-i18n="btnSave">Lưu</button>
   </div>
 
-  <div class="mi-sec">Segment Currents</div>
+  <div class="mi-sec" data-i18n="segCurrSec">Dòng theo mức pin</div>
 
   <div class="mi-card pad">
     <div id="segHint" class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.6;margin-bottom:12px"></div>
@@ -1929,31 +1947,29 @@ code{
     <table class="segtable">
       <thead>
         <tr>
-          <th>SOC Range</th>
-          <th>Request Current</th>
+          <th data-i18n="thSocRange">Khoảng SOC</th>
+          <th data-i18n="thReqCurr">Dòng yêu cầu</th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
     </table>
 
-    <div class="votnote" style="margin-top:12px">
-      Actual inject = <b>min(segment value, Limit × Thermal Derate)</b>.<br>
-      Segment values can only <b>reduce</b> current and never exceed the Total Limit.<br>
-      Setting all 5 equal = no per-SOC step-down (recommended).
+    <div class="votnote" style="margin-top:12px" data-i18n-html="segNoteHtml">
+      Ghi thực tế = <b>min(giá trị phân đoạn, Tổng giới hạn × Giảm theo nhiệt)</b>.<br>
+      Giá trị từng đoạn chỉ có thể <b>giảm bớt</b> dòng, không bao giờ vượt Tổng giới hạn.<br>
+      Đặt cả 5 đoạn bằng nhau = không hạ sớm theo pin (khuyên dùng).
     </div>
   </div>
 
   <div class="mi-btn-row">
-    <button class="mi-btn primary" id="btnSave" disabled>Save Segments</button>
+    <button class="mi-btn primary" id="btnSave" disabled data-i18n="btnSaveSegs">Lưu phân đoạn</button>
   </div>
 
-  <div class="mi-sec">Effective Inject Value</div>
+  <div class="mi-sec" data-i18n="effInjectSec">Giá trị áp dụng thực tế</div>
 
   <div class="mi-card pad">
     <div class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.7">
-      Calculated automatically by daemon (<b>no input needed</b>):<br>
-      <b>Total Limit × Thermal Derate</b><br>
-      Current result: <b id="segCapTxt2">—</b> mA
+      <span data-i18n-html="effInjectDesc">Tự động tính bởi daemon (<b>không cần nhập</b>):<br><b>Tổng giới hạn × Giảm theo nhiệt</b><br>Kết quả hiện tại: </span><b id="segCapTxt2">—</b> mA
     </div>
   </div>
 
@@ -1964,71 +1980,71 @@ code{
      ============================================================ -->
 <div class="mi-page" id="page3">
 
-  <div class="mi-sec">Static Cap</div>
+  <div class="mi-sec" data-i18n="staticCapSec">Giới hạn tĩnh</div>
 
   <div class="mi-card pad">
     <div id="safeHint" class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.6;margin-bottom:12px"></div>
 
     <div class="votrow">
-      <div class="votlabel">Static Cap<span class="votunit">mA</span></div>
+      <div class="votlabel"><span data-i18n="staticCapSec">Giới hạn tĩnh</span><span class="votunit">mA</span></div>
       <input type="text" id="safeCap" inputmode="numeric" pattern="[0-9]*"
              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
              maxlength="5" min="0" max="15600" step="100">
     </div>
-    <div class="votnote">
-      Enter <b>0</b> = no extra cap (recommended; governed by Limit × Thermal Derate).
+    <div class="votnote" data-i18n-html="staticCapNoteHtml">
+      Nhập <b>0</b> = không giới hạn thêm (khuyên dùng; điều tiết bởi Tổng giới hạn × Giảm theo nhiệt).
     </div>
 
     <div id="safeStat" class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.7;
          padding-top:10px;border-top:1px solid var(--card-3)"></div>
   </div>
 
-  <div class="mi-sec">Thermal Control</div>
+  <div class="mi-sec" data-i18n="thermSec">Kiểm soát nhiệt</div>
 
   <div class="mi-card pad">
     <div id="thermHint" class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.6;margin-bottom:12px"></div>
 
     <div class="switchrow">
       <div>
-        <div style="font-size:13.5px;font-weight:600">Enable Thermal Control</div>
-        <div style="font-size:11.5px;color:var(--dim);margin-top:2px">
-          If disabled, temperature no longer throttles current
+        <div style="font-size:13.5px;font-weight:600" data-i18n="thermEnTitle">Bật kiểm soát nhiệt</div>
+        <div style="font-size:11.5px;color:var(--dim);margin-top:2px" data-i18n="thermEnSub">
+          Nếu tắt, nhiệt độ sẽ không giảm dòng sạc nữa
         </div>
       </div>
       <div class="pillrow" id="thermEnRow">
-        <button class="pill on" data-te="0" id="thermEnOff">Off</button>
-        <button class="pill"    data-te="1" id="thermEnOn">On</button>
+        <button class="pill on" data-te="0" id="thermEnOff" data-i18n="off">Tắt</button>
+        <button class="pill"    data-te="1" id="thermEnOn" data-i18n="on">Bật</button>
       </div>
     </div>
 
     <div class="votrow">
-      <div class="votlabel">Throttle Start<span class="votunit">Board 0.1°C</span></div>
+      <div class="votlabel"><span data-i18n="thermStartLbl">Bắt đầu giảm dòng</span><span class="votunit" data-i18n="boardUnit">Bo 0.1°C</span></div>
       <input type="text" id="thermStart" inputmode="numeric" pattern="[0-9]*"
              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
              maxlength="4" min="300" max="1000" step="5">
     </div>
     <div class="votrow">
-      <div class="votlabel">Release Control<span class="votunit">Board 0.1°C</span></div>
+      <div class="votlabel"><span data-i18n="thermStopLbl">Ngừng can thiệp</span><span class="votunit" data-i18n="boardUnit">Bo 0.1°C</span></div>
       <input type="text" id="thermStop" inputmode="numeric" pattern="[0-9]*"
              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
              maxlength="4" min="300" max="1000" step="5">
     </div>
 
-    <div class="votnote">
-      Unit 0.1°C: 460 = 46.0°C. Defaults: 46.0°C start throttling, 54.0°C release.<br>
-      Caps <b>board temp</b>; battery has fixed 40.5°C protection (stricter wins).
+    <div class="votnote" data-i18n-html="thermNoteHtml">
+      Đơn vị 0.1°C: 460 = 46.0°C. Mặc định: 46.0°C bắt đầu giảm dòng, 54.0°C nhả quyền.<br>
+      Giới hạn theo <b>nhiệt độ bo</b>; pin có ngưỡng bảo vệ cố định 40.5°C (bên nào nóng hơn ưu tiên trước).
     </div>
 
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--card-3)">
       <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px">
-        <div style="font-size:13.5px;font-weight:600">Stop Boost SOC</div>
+        <div style="font-size:13.5px;font-weight:600" data-i18n="socStopTitle">Ngừng tăng tốc ở mức pin</div>
         <div id="socStopVal" style="font-size:20px;font-weight:700;color:var(--ok,#30a46c);
              font-variant-numeric:tabular-nums">90<span style="font-size:12px;
              font-weight:500;color:var(--dim);margin-left:1px">%</span></div>
       </div>
-      <div style="font-size:11.5px;color:var(--dim);line-height:1.6;margin-bottom:10px">
-        Hands control back to stock once battery level reaches this threshold.<br>
-        Drag to <b>100%</b> to manage through full charge.
+      <div style="font-size:11.5px;color:var(--dim);line-height:1.6;margin-bottom:10px" data-i18n-html="socStopDescHtml">
+        Trả quyền sạc lại cho hệ thống khi pin đạt mức này.<br>
+        Kéo tới <b>100%</b> để quản lý đến khi sạc đầy.
       </div>
       <input type="range" id="socStop" min="40" max="100" step="1" value="90"
              style="width:100%;height:26px;margin:0;accent-color:var(--ok,#30a46c)">
@@ -2041,20 +2057,20 @@ code{
     </div>
 
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--card-3)">
-      <div style="font-size:12px;color:var(--dim);margin-bottom:6px">Current Thermal Tiers</div>
+      <div style="font-size:12px;color:var(--dim);margin-bottom:6px" data-i18n="thermTiersTitle">Các ngưỡng nhiệt hiện tại</div>
       <div id="thermLvlList" class="dynhint" style="font-size:12.5px;line-height:1.8"></div>
     </div>
   </div>
 
   <div class="mi-btn-row">
-    <button class="mi-btn primary" id="btnSafeSave" disabled>Save</button>
+    <button class="mi-btn primary" id="btnSafeSave" disabled data-i18n="btnSave">Lưu</button>
   </div>
 
   <!-- Footer -->
   <div class="credit">
     <div class="credit-l1">iQOO Z10 Turbo+ (V2507A)</div>
-    <div class="credit-l2">V2507A Native Edition</div>
-    <div class="credit-l3">Dimensity 9400+ (MT6991) · DCHG_FCC Direct<br>See module info for version</div>
+    <div class="credit-l2" data-i18n="creditEdition">Bản hỗ trợ gốc V2507A</div>
+    <div class="credit-l3" data-i18n-html="creditInfoHtml">Dimensity 9400+ (MT6991) · Điều khiển trực tiếp DCHG_FCC<br>Xem trang chi tiết module để biết phiên bản</div>
   </div>
 
 </div>
@@ -2071,7 +2087,7 @@ code{
           <path d="M10.2 20v-5.4h3.6V20"/>
         </svg>
       </span>
-      <span class="lb">Home</span>
+      <span class="lb" data-i18n="navHome">Trang chủ</span>
     </button>
     <button class="mi-tab" data-page="2">
       <span class="ic">
@@ -2081,7 +2097,7 @@ code{
           <path d="M13.4 2.6 5.6 13.4h5.2l-.9 8 7.8-10.8h-5.2l.9-8z"/>
         </svg>
       </span>
-      <span class="lb">Charging</span>
+      <span class="lb" data-i18n="navCharging">Sạc</span>
     </button>
     <button class="mi-tab" data-page="3">
       <span class="ic">
@@ -2093,7 +2109,7 @@ code{
           <path d="M2.8 10h4.4M2.8 14h4.4M16.8 10h4.4M16.8 14h4.4"/>
         </svg>
       </span>
-      <span class="lb">Advanced</span>
+      <span class="lb" data-i18n="navAdvanced">Nâng cao</span>
     </button>
 </div>
 </div>
@@ -2335,6 +2351,683 @@ function showErr(msg){
   setStylePx('errbox','display','block'); setText('errbox', msg);
 }
 
+var LANG_KEY = 'vfcs_lang_v1';
+var LANG = (function(){
+  try { return localStorage.getItem(LANG_KEY) === 'en' ? 'en' : 'vi'; }
+  catch(e){ return 'vi'; }
+})();
+
+var I18N = {
+  vi: {
+    title: 'Bảng điều khiển tăng tốc sạc',
+    subTitle: 'Dịch vụ tăng tốc sạc',
+    loading: 'Đang tải...',
+    nativeBadge: 'Hỗ trợ gốc',
+    peakTheory: 'Đỉnh lý thuyết',
+    curLimit: 'Giới hạn dòng',
+    injectChan: 'Kênh điều khiển',
+    battPower: 'Công suất pin',
+    battTemp: 'Nhiệt độ pin',
+    liveMonitor: 'Theo dõi trực tiếp',
+    battSoc: 'Mức pin SOC',
+    battVolt: 'Điện áp pin',
+    battCurr: 'Dòng điện pin',
+    inputVolt: 'Áp đầu vào',
+    dtLimitLbl: 'Giới hạn DT máy',
+    totalLimitLbl: 'Tổng giới hạn dòng',
+    reqLimitBadge: 'Mức yêu cầu',
+    afterThermLbl: 'Sau giảm theo nhiệt',
+    battPeakPrefix: 'Đỉnh pin ≈ ',
+    noteFormulaHtml: 'Giá trị ghi = <b>Tổng giới hạn × Giảm theo nhiệt</b> (97/91/81/72/63%).<br>Chiếm quyền trực tiếp <b>DCHG_FCC</b> qua <code>vfcs_class/fchg_fcc_ma</code>, bỏ qua hãm nhiệt/sáng màn hình mặc định; công suất thực tế vẫn phụ thuộc giao thức sạc (FlashCharge 15.6A / PPS 10A / UFCS 8A) và PDO củ sạc.',
+    tempPauseSec: 'Tạm ngưng',
+    tempPauseDesc: 'Gỡ toàn bộ can thiệp nhưng vẫn <b>giữ nguyên cấu hình</b> qua lần khởi động lại. Phù hợp khi cắm sạc chậm / trên xe.',
+    btnPause: 'Tạm ngưng sạc nhanh',
+    btnResume: 'Tiếp tục tăng tốc',
+    maintSec: 'Bảo trì',
+    restoreDesc: 'Khôi phục gốc: gỡ toàn bộ can thiệp và chuyển về cấu hình Nguyên bản (không tự chạy lại sau khi khởi động lại). <b>Không xoá cấu hình hay gỡ module.</b><br>Khác với Tạm ngưng: muốn bật lại tăng tốc cần chọn lại cấu hình.',
+    btnRestore: 'Khôi phục gốc',
+    recLogTitle: 'Ghi nhật ký chạy',
+    recLogSub: 'Ghi vào /data/adb, tự xoay vòng khi quá 256KB',
+    off: 'Tắt',
+    on: 'Bật',
+    btnLogDump: 'Xuất gói chẩn đoán',
+    btnHealth: 'Kiểm tra CPU / Sức khoẻ',
+    profileSec: 'Cấu hình sạc',
+    prof1: 'Siêu tốc',
+    prof1Sub: 'Nhanh nhất',
+    prof2: 'Cân bằng',
+    prof2Sub: 'Mát hơn',
+    prof3: 'Nguyên bản',
+    prof3Sub: 'Tắt',
+    gearHintDefault: 'Có hiệu lực sau ~2 giây. "Nguyên bản" trả quyền lại hệ thống; chọn cấu hình tăng tốc để bật lại.<br>Muốn tạm ngưng nhanh, dùng nút Tạm ngưng ở Trang chủ.',
+    currSettingsSec: 'Thiết lập dòng',
+    votNoteHtml: 'Giá trị ghi = <b>Giới hạn × Giảm theo nhiệt</b>, không phải dòng cố định.<br>Mặc định <b id="votIbatDef">15600</b> mA = <b>Chuẩn DT gốc máy</b> (vivo,fchg-curr-max-ma = 15600).<br><b>15600 × 4.50V ≈ 70.2W là ngưỡng trần lý thuyết phía pin</b>; công suất thực tế phụ thuộc giao thức và dòng PDO của củ sạc.',
+    hwDirectTitle: 'Điều khiển phần cứng trực tiếp',
+    hwDirectSub: 'Chiếm quyền DCHG_FCC trực tiếp qua vfcs_class (VFCS_CLASS_EVENT)',
+    btnSave: 'Lưu',
+    segCurrSec: 'Dòng theo mức pin',
+    thSocRange: 'Khoảng SOC',
+    thReqCurr: 'Dòng yêu cầu',
+    segNoteHtml: 'Ghi thực tế = <b>min(giá trị phân đoạn, Tổng giới hạn × Giảm theo nhiệt)</b>.<br>Giá trị từng đoạn chỉ có thể <b>giảm bớt</b> dòng, không bao giờ vượt Tổng giới hạn.<br>Đặt cả 5 đoạn bằng nhau = không hạ sớm theo pin (khuyên dùng).',
+    btnSaveSegs: 'Lưu phân đoạn',
+    effInjectSec: 'Giá trị áp dụng thực tế',
+    effInjectDesc: 'Tự động tính bởi daemon (<b>không cần nhập</b>):<br><b>Tổng giới hạn × Giảm theo nhiệt</b><br>Kết quả hiện tại: ',
+    staticCapSec: 'Giới hạn tĩnh',
+    staticCapNoteHtml: 'Nhập <b>0</b> = không giới hạn thêm (khuyên dùng; điều tiết bởi Tổng giới hạn × Giảm theo nhiệt).',
+    thermSec: 'Kiểm soát nhiệt',
+    thermEnTitle: 'Bật kiểm soát nhiệt',
+    thermEnSub: 'Nếu tắt, nhiệt độ sẽ không giảm dòng sạc nữa',
+    thermStartLbl: 'Bắt đầu giảm dòng',
+    thermStopLbl: 'Ngừng can thiệp',
+    boardUnit: 'Bo 0.1°C',
+    thermNoteHtml: 'Đơn vị 0.1°C: 460 = 46.0°C. Mặc định: 46.0°C bắt đầu giảm dòng, 54.0°C nhả quyền.<br>Giới hạn theo <b>nhiệt độ bo</b>; pin có ngưỡng bảo vệ cố định 40.5°C (bên nào nóng hơn ưu tiên trước).',
+    socStopTitle: 'Ngừng tăng tốc ở mức pin',
+    socStopDescHtml: 'Trả quyền sạc lại cho hệ thống khi pin đạt mức này.<br>Kéo tới <b>100%</b> để quản lý đến khi sạc đầy.',
+    thermTiersTitle: 'Các ngưỡng nhiệt hiện tại',
+    creditEdition: 'Bản hỗ trợ gốc V2507A',
+    creditInfoHtml: 'Dimensity 9400+ (MT6991) · Điều khiển trực tiếp DCHG_FCC<br>Xem trang chi tiết module để biết phiên bản',
+    navHome: 'Trang chủ',
+    navCharging: 'Sạc',
+    navAdvanced: 'Nâng cao',
+    cancel: 'Huỷ',
+    confirm: 'Xác nhận',
+    segNames: ['Pin thấp','Trung thấp','Pin giữa','Trung cao','Pin cao'],
+    svcRun: 'Đang chạy',
+    svcStop: 'Đã dừng',
+    svcIdle: 'Chờ',
+    svcBad: 'Lỗi kết nối',
+    svcFail: 'Thất bại',
+    pwIdle: 'Nghỉ',
+    pwUnplugged: 'Chưa cắm sạc',
+    pwInMeas: 'Đo đầu vào',
+    pwBattMeas: 'Đo phía pin',
+    boardLbl: 'Bo',
+    battLbl: 'Pin',
+    chgTag: 'Sạc',
+    disTag: 'Xả',
+    metaNode: 'Node',
+    metaIn: 'Vào',
+    metaOcv: 'OCV khối',
+    metaVfloat: 'vfloat cell',
+    metaTherm: 'Nhiệt',
+    thermStates: ['Bình thường','Cảnh báo','Giảm A','Giảm B','Hệ thống giữ'],
+    srcSnap: ' · Dữ liệu cũ, đang cập nhật',
+    srcStale: ' · Dữ liệu đệm, đang cập nhật',
+    dtUnreadableTitle: 'Cấu hình gốc: không đọc được bảng phân đoạn DT',
+    dtUnreadableBody: 'Sẽ dùng giá trị node sao lưu trước khi can thiệp (hoặc giá trị an toàn) khi chuyển về Nguyên bản. Tăng tốc sạc không bị ảnh hưởng, nhưng dòng khôi phục Nguyên bản có thể khác mặc định gốc.',
+    dtUnreadableTip: 'Kiểm tra qua CLI: sh {bin} factory raw',
+    tip: 'Mẹo',
+    dischargeTip: ' Xả xuống dưới {max}% trước khi cắm lại để áp dụng ngay.',
+    profNames: {1:'Siêu tốc', 2:'Cân bằng', 3:'Nguyên bản'},
+    capMaxDt: ' (Tối đa {mx} mA · DT {dt} mA)',
+    capMaxOnly: ' (Tối đa {mx} mA)',
+    gearStockHint: 'Cấu hình Nguyên bản: đã trả quyền cho hệ thống.',
+    gearActiveHint: 'Đang bật cấu hình "{name}".{cap}',
+    badInvalid: 'Không hợp lệ',
+    badExceeds: 'Vượt 0~{cap}',
+    badStopChg: 'Sẽ ngừng sạc',
+    badDrop13w: 'Tụt còn ~13W',
+    badNonDt: 'Ngoài mức DT',
+    valRangeReverted: 'Giá trị phải trong 0~{cap}; đã hoàn tác',
+    saveSegsCnt: 'Lưu phân đoạn ({n})',
+    votMissingTitle: 'Phiên bản này chưa hỗ trợ điều khiển trực tiếp',
+    votMissingBody: 'Backend không trả về trạng thái voter; hãy cài bản v3.5.11+.',
+    votTgtDchg: 'Giới hạn sạc (mA)',
+    votTgtUserFcc: 'Giới hạn sạc',
+    votTgtUserIbat: 'Dòng pin (% cũ, đã bỏ)',
+    votTgtUserIbus: 'Dòng vào bus',
+    votTgtUserInput: 'Đầu vào (% cũ, đã bỏ)',
+    votTgtUsbIcl: 'Giới hạn dòng vào',
+    unresolved: 'chưa xác định',
+    votSupported: '✓ Máy hỗ trợ điều khiển phần cứng trực tiếp',
+    votTargetLbl: 'Đối tượng',
+    votLimitLbl: 'giới hạn {v} mA.',
+    votDirectOn: 'Đang bật điều khiển trực tiếp',
+    votUnsupported: '✗ Không hỗ trợ điều khiển phần cứng trực tiếp',
+    unknownReason: 'Không rõ nguyên nhân',
+    archDiffNote: 'Khác biệt kiến trúc, không phải lỗi.',
+    logOnToast: 'Đã bật ghi nhật ký chạy',
+    logOffToast: 'Đã tắt ghi nhật ký chạy',
+    toggleFail: 'Chuyển đổi thất bại: {e}',
+    disabled: 'Đã tắt',
+    ocMaxTxt: 'Tối đa {v}',
+    dtSpecTxt: 'Chuẩn DT {v}',
+    votMinErr: 'Tối thiểu 1000 (tránh ngắt sạc)',
+    votMaxErr: 'Tối đa {cap} (giới hạn dòng DT máy)',
+    thermMax1200: 'Tối đa 1200 (=120.0°C)',
+    outOfRange: 'Giá trị ngoài ngưỡng',
+    saving: 'Đang lưu...',
+    savedDirect: 'Đã lưu {n} thiết lập điều khiển trực tiếp',
+    writeFailed: 'Ghi thất bại',
+    saveCommErr: 'Lưu thất bại: lỗi giao tiếp module',
+    thermNoBackendTitle: 'Phiên bản này chưa hỗ trợ chỉnh nhiệt',
+    thermNoBackendBody: 'Backend không trả về trường therm; hãy cài bản v3.5.11+.',
+    thermLive: 'Đo thực tế: Bo <b>{tb}</b> · Pin <b>{tc}</b>',
+    thermEnLine: '<b style="color:var(--ok)">Đang bật kiểm soát nhiệt</b>: bên nào nóng hơn giữa bo & pin sẽ được ưu tiên.',
+    thermDisLine: '<b style="color:var(--danger,#e5484d)">⚠ Đang tắt kiểm soát nhiệt</b>: bỏ mọi ngưỡng nhiệt; chỉ dùng ngắn hạn khi tản nhiệt tốt.',
+    thermOffList: 'Đã tắt kiểm soát nhiệt; các ngưỡng không hiệu lực.',
+    thermBadOrder: 'Nhiệt độ nhả quyền phải cao hơn nhiệt độ bắt đầu giảm dòng.',
+    tierNormal: 'Bình thường -> dưới {t}',
+    tierWarn: 'Cảnh báo -> từ {t} (hạ 1 bậc SOC)',
+    tierStepA: 'Giảm bậc A -> {t}',
+    tierStepB: 'Giảm bậc B -> {t}',
+    tierRelease: 'Nhả quyền -> >= {t} (ngừng ghi node)',
+    tierRecover: 'Phục hồi -> <= {t} và giữ ổn định',
+    battFixedLine: 'Nhiệt độ pin (cố định): Cảnh báo {w} / Nhả quyền {r}',
+    derate4Step: 'Giảm 4 bậc tuyến tính: T1={t1} T2={t2} T3={t3} T4={t4} T5={t5}',
+    safeNoBackendTitle: 'Backend không trả về dữ liệu giới hạn tĩnh',
+    safeNoBackendBody: 'Hãy kiểm tra script module và WebUI khớp phiên bản (hoặc flash lại module).',
+    safeQcom: 'Máy Snapdragon: module <b>điều khiển trực tiếp dòng sạc</b>.',
+    safeMtkDirect: 'Máy Dimensity (V2507A): <b>chiếm quyền trực tiếp giới hạn DCHG_FCC</b> qua vfcs_class.',
+    safeMtkReq: 'Máy Dimensity: module <b>yêu cầu dòng sạc từ hệ thống</b>.',
+    safeUnknownDev: 'Chưa nhận diện nền tảng máy:',
+    safeHintTail: 'Chỉ giới hạn <b>mức trần</b>; nên để 0 cho sử dụng thông thường.',
+    safeStatHtml: 'Giới hạn tĩnh: {cap} · Nền tảng: <b>{plat}</b>{model}',
+    socCurTxt: ' · Pin hiện tại <b>{s}%</b>',
+    socReached: ' (<span style="color:var(--warn,#d97706)">đã chạm ngưỡng ngừng, đã trả hệ thống</span>)',
+    socBelow: ' (còn {d}% tới ngưỡng ngừng)',
+    socFullBody: '<b>Quản lý tới khi đầy</b>: không chặn ngưỡng SOC trên; hệ thống tự nạp nhỏ giọt cuối chu kỳ.',
+    socNearFullBody: 'Ngừng gần đầy: trả quyền sau <b>{v}%</b>. Hệ thống vốn tự giảm dòng ở mức pin cao.',
+    socLowBody: '<span style="color:var(--warn,#d97706)">Ngưỡng thấp</span>: ngừng ở <b>{v}%</b>, chỉ tăng tốc khi pin thấp. Kéo lên nếu muốn sạc nhanh lâu hơn.',
+    socMidBody: 'Ngừng ghi khi vượt <b>{v}%</b>, để vivo tự điều áp kết thúc chu kỳ gốc.',
+    thermRangeErr: 'Nhiệt độ phải trong 30.0~100.0°C (nhập 300~1000)',
+    safeRangeErr: 'Giới hạn tĩnh phải trong 0~{cap} mA (0 = không giới hạn)',
+    warnThermOff: '- Kiểm soát nhiệt [TẮT]: bỏ cả ngưỡng bo lẫn pin; dòng chạy theo bảng SOC cho tới khi kernel cắt cứng ở 80°C (tụt công suất đột ngột).',
+    warnThermStart: '- Nhiệt độ bắt đầu giảm {t}°C: rất sát ngưỡng cắt cứng 80°C của kernel; giảm dòng kích hoạt rất muộn.',
+    warnThermStop: '- Nhiệt độ nhả quyền {t}°C: gần như bỏ qua bước nhả quyền, phụ thuộc hoàn toàn cắt cứng từ kernel.',
+    savedSettings: 'Đã lưu {n} thiết lập',
+    confirmWeakTherm: 'Xác nhận giảm bảo vệ nhiệt:\n\n{w}\n\nLựa chọn của bạn — hãy xác nhận đã hiểu rủi ro nhiệt độ trước khi lưu.',
+    confirmWeakOk: 'Tôi hiểu, Lưu',
+    confirmWeakCancel: 'Quay lại',
+    confirmRestoreMsg: 'Chuyển về Nguyên bản? Thao tác này sẽ:\n- Dừng daemon và chuyển về Nguyên bản (tắt kể cả sau khi khởi động lại)\n- Trả quyền điều khiển dòng sạc về hệ thống\n- Đưa fchg_fcc_ma về trạng thái nghỉ gốc\n- Xoá trạng thái phiên và giao thức\n\nCấu hình và module vẫn được giữ nguyên.\nLưu ý: muốn tăng tốc lại cần chọn lại cấu hình ở đây.\nDùng "Tạm ngưng sạc nhanh" nếu chỉ muốn nghỉ tạm thời.',
+    restoring: 'Đang khôi phục...',
+    stockWhyInactive: 'Cấu hình Nguyên bản: module đã dừng, hệ thống tự quản lý sạc.',
+    restoredSlow: 'Đã khôi phục gốc (phản hồi chậm; đã cập nhật theo trạng thái máy)',
+    restoredOk: 'Đã khôi phục về mặc định gốc',
+    restoreFail: 'Khôi phục thất bại: {e}',
+    restoreCommErr: 'Khôi phục thất bại: lỗi giao tiếp module',
+    restoreBtnOk: 'Khôi phục',
+    checking: 'Đang đo... (~12s)',
+    samplingMsg: 'Đang lấy mẫu 10 giây để đo mức CPU thực tế của daemon và watchdog...',
+    scriptNotFound: 'Không tìm thấy script module; hãy kiểm tra module đã cài và bật chưa.',
+    commTimeout: 'Quá thời gian giao tiếp module (đã huỷ)',
+    noOutput: 'Không có đầu ra',
+    checkFailed: 'Kiểm tra thất bại: {m}',
+    healthOk: 'Khoẻ mạnh',
+    healthWarn: 'Cảnh báo',
+    healthFail: 'Phát hiện lỗi',
+    upSec: ' · chạy {n}s',
+    upMin: ' · chạy {n}p',
+    upHr: ' · chạy {n}g',
+    selfCpuTitle: 'CPU tự thân module',
+    selfCpuDesc: 'CPU tự thân = mức CPU tiến trình thực dùng (tổng / thời gian chạy); không phình theo thời gian.',
+    selfCpuEarly: 'Daemon chạy dưới 2 phút; chưa đủ mẫu trung bình (tạm ẩn).',
+    tooEarly: 'Chưa đủ mẫu',
+    daemonLbl: 'Daemon',
+    watchdogLbl: 'Watchdog',
+    diagChildSum: 'Chẩn đoán · Tổng CPU tiến trình con',
+    diagChildDesc: 'CPU <b>tích luỹ</b> của các subshell đã chạy (sleep/cat/awk) từ lúc khởi động; thể hiện tổng việc đã làm, <b>không phải tải tức thời</b>.',
+    idleWord: 'Nghỉ',
+    winCpuTitle: 'CPU trong cửa sổ đo',
+    idleInWindow: 'Nghỉ trong cửa sổ',
+    winTicksLbl: 'Tick trong cửa sổ',
+    sampleWinLbl: 'Cửa sổ mẫu',
+    idleWindowHint: '"Nghỉ trong cửa sổ" là bình thường: khi không cắm sạc, daemon chỉ thức dậy mỗi 20 giây. Xem mục "CPU tự thân module" ở trên.',
+    runningPid: 'Đang chạy · PID {pid}',
+    stoppedWord: 'Đã dừng',
+    heartbeatLbl: 'Nhịp tim',
+    noRecord: 'Chưa có',
+    secsAgo: '{s} giây trước',
+    chargerLbl: 'Bộ sạc',
+    connectedWord: 'Đã cắm',
+    unpluggedWord: 'Đã rút',
+    battStatusLbl: 'Trạng thái pin',
+    socLbl: 'Mức pin SOC',
+    activeProfLbl: 'Cấu hình đang chọn',
+    injectChLbl: 'Kênh ghi {tgt}',
+    stuckForceHint: '⚠ Đã rút sạc nhưng force_active=1 (có thể còn sót trạng thái từ lần sạc trước).',
+    logSizeLbl: 'Dung lượng log',
+    versionLbl: 'Phiên bản',
+    healthHelpHtml: 'Chụp màn hình bảng này để chẩn đoán sự cố.<br>Nếu cần log chi tiết, bấm "Xuất gói chẩn đoán".',
+    dumpBusy: 'Đang thu thập & đóng gói...',
+    dumpWaitMsg: 'Đang thu thập bản chẩn đoán (~5-15 giây)...\nBao gồm: trạng thái module / sạc / DT / voter / sysfs / dmesg / props / tiến trình',
+    dumpMissing: 'Thất bại: không tìm thấy logdump.sh\nĐường dẫn dự kiến:\n  {p}',
+    dumpMissingToast: 'Không tìm thấy logdump.sh',
+    dumpDone: '✔ Đã tạo xong (chỉ đọc; không đổi thiết lập nào)',
+    dumpFile: 'Tệp: {p}',
+    dumpShareHint: 'Mở trình quản lý tệp vào /sdcard/Download để lấy và chia sẻ gói nén.',
+    dumpCreatedToast: 'Đã tạo gói chẩn đoán',
+    dumpFailOut: 'Thất bại (mã {code})\n{msg}',
+    dumpFailToast: 'Xuất thất bại; xem chi tiết bên dưới',
+    dumpCommErr: 'Thất bại: lỗi giao tiếp module (quá giờ hoặc bị từ chối)',
+    dumpCommToast: 'Xuất thất bại: lỗi giao tiếp',
+    errTimeout: 'Quá thời gian đọc (chờ > 15 giây)\n\nNguyên nhân thường gặp:\n- Nhiệt độ / pin quá thấp làm đọc cảm biến chậm -> cắm sạc và thử lại\n- Máy vừa khởi động, I/O nền bận -> chờ 1 phút\n- Lần đầu dựng cache DT -> chờ ~5-10 giây\n\nChạy trong terminal để kiểm tra thời gian:\ntime sh {bin} getjson',
+    errScript: 'Lỗi script module: {err}\n\nKiểm tra lại file/quyền của module hoặc flash lại.',
+    errNoOut: 'Module không có phản hồi\n\nCó thể do:\n- Module chưa cài, đã tắt hoặc đã gỡ\n- Mới flash trong KernelSU chưa khởi động lại máy\n\nHãy bật module -> khởi động lại -> mở lại WebUI.',
+    errBadJson: 'Phản hồi JSON không hợp lệ ({len} byte)\n\n80 ký tự đầu: {head}\n\nCó thể lệch phiên bản giữa script module và WebUI.',
+    pauseCurOn: '<b style="color:var(--warn,#d97706)">Trạng thái: Đang tạm ngưng</b><br>Đã gỡ can thiệp; sạc do hệ thống quản lý.',
+    pauseCurActive: '<b style="color:var(--ok,#30a46c)">Trạng thái: Đang tăng tốc</b>',
+    pauseDaemonOff: '<br>(Daemon chưa chạy; bấm "Tiếp tục tăng tốc" để bật lại)',
+    askPauseMsg: 'Tạm ngưng tăng tốc?\n\n- Gỡ toàn bộ can thiệp nhưng giữ cấu hình qua lần khởi động lại\n- Bấm "Tiếp tục tăng tốc" sau để bật lại\n\nPhù hợp khi cắm sạc chậm / trên xe.',
+    pausing: 'Đang tạm ngưng...',
+    pausedToast: 'Đã tạm ngưng tăng tốc',
+    pauseFail: 'Tạm ngưng thất bại: {e}',
+    pauseCommErr: 'Tạm ngưng thất bại: lỗi giao tiếp module',
+    pauseBtnOk: 'Tạm ngưng',
+    resuming: 'Đang tiếp tục...',
+    resumedToast: 'Đã bật lại tăng tốc',
+    resumeFail: 'Tiếp tục thất bại: {e}',
+    resumeCommErr: 'Tiếp tục thất bại: lỗi giao tiếp module',
+    segWhoSelf: 'giá trị đoạn',
+    segWhoLimit: 'giới hạn × giảm nhiệt',
+    segHintInRange: 'Ở mức <b>{soc}%</b> (<b>{lbl}</b>), đoạn này yêu cầu <b>{val} mA</b>.<br>',
+    segHintOutRange: 'Ở mức <b>{soc}%</b>, SOC nằm ngoài vùng kích hoạt (nghỉ).<br>',
+    segHintEff: 'Ghi hiệu dụng ≈ <b>{v} mA</b> (giới hạn bởi {who})',
+    segHintTherm: '<br><span style="color:var(--warn,#d97706)">Đang giảm dòng theo nhiệt; giới hạn hãm còn {g} mA</span>',
+    inspectCmdHint: '\n\nChạy lệnh này để kiểm tra:\nsh {bin} getjson',
+    readFailErr: 'Đọc trạng thái thất bại:\n{msg}',
+    askStockMsg: 'Chuyển sang cấu hình Nguyên bản? Thao tác này sẽ dừng tăng tốc và trả quyền lại cho hệ thống.\n\nModule sẽ khôi phục theo thứ tự:\n1. Khôi phục giá trị gốc đã sao lưu (trạng thái xuất xưởng)\n2. Dùng giới hạn DT nếu thiếu bản sao lưu\n3. Dùng giá trị an toàn mặc định\n\nDaemon sẽ thoát và ngừng ghi node. Tiếp tục?',
+    switchBtn: 'Chuyển',
+    switching: 'Đang chuyển...',
+    switchedSlow: 'Đã chuyển sang {name} (phản hồi chậm; đã cập nhật giao diện)',
+    switchedOk: 'Đã chuyển sang {name}',
+    switchFail: 'Chuyển đổi thất bại: {e}',
+    savedChanges: 'Đã lưu {n} thay đổi',
+    askDirectMsg: 'Bật điều khiển phần cứng trực tiếp?\n\nModule sẽ bỏ qua lịch hệ thống và ép trực tiếp dòng DCHG_FCC.\n\n- Không qua kiểm tra phụ của hệ thống\n- Khuyên thử với Tổng giới hạn dòng thấp trước\n\nBật ngay?',
+    enableWord: 'Bật',
+    askThermOffMsg: 'Tắt kiểm soát nhiệt?\n\nMọi ngưỡng nhiệt độ sẽ bị bỏ qua và máy có thể chạm ngưỡng cắt cứng 80°C của kernel.\n\nVẫn tắt?',
+    disableWord: 'Tắt',
+    notKsuErr: 'Không chạy bên trong KernelSU Manager (chế độ xem trước; không thể lưu cài đặt).\nHãy mở trang này từ mục Module trong KernelSU Manager.'
+  },
+  en: {
+    title: 'Charge Boost Console',
+    subTitle: 'Charge Boost Service',
+    loading: 'Loading...',
+    nativeBadge: 'Native',
+    peakTheory: 'Theoretical Peak',
+    curLimit: 'Current Limit',
+    injectChan: 'Inject Channel',
+    battPower: 'Battery Power',
+    battTemp: 'Battery Temp',
+    liveMonitor: 'Live Monitor',
+    battSoc: 'Battery SOC',
+    battVolt: 'Battery Volt',
+    battCurr: 'Battery Curr',
+    inputVolt: 'Input Volt',
+    dtLimitLbl: 'Device DT Limit',
+    totalLimitLbl: 'Total Current Limit',
+    reqLimitBadge: 'Request Limit',
+    afterThermLbl: 'After Thermal Derate',
+    battPeakPrefix: 'Batt peak ≈ ',
+    noteFormulaHtml: 'Injected = <b>Limit × Thermal Derate</b> (97/91/81/72/63%).<br>Directly overrides <b>DCHG_FCC</b> via <code>vfcs_class/fchg_fcc_ma</code>, bypassing stock thermal/screen-on limits; actual output remains bounded by charger protocol (FlashCharge 15.6A / PPS 10A / UFCS 8A) and adapter PDO max.',
+    tempPauseSec: 'Temporary Pause',
+    tempPauseDesc: 'Clears all overrides while <b>keeping config</b> across reboots. Ideal for slow or car chargers.',
+    btnPause: 'Pause Boost',
+    btnResume: 'Resume Boost',
+    maintSec: 'Maintenance',
+    restoreDesc: 'Restore Stock: clears all overrides and switches to Stock profile (stays inactive after reboot). <b>Keeps config and module installed.</b><br>Unlike Pause Boost, re-enabling boost requires selecting a profile again.',
+    btnRestore: 'Restore Stock',
+    recLogTitle: 'Record Runtime Log',
+    recLogSub: 'Writes to /data/adb, auto-rotates at 256KB',
+    off: 'Off',
+    on: 'On',
+    btnLogDump: 'Export Debug Bundle',
+    btnHealth: 'Check CPU / Health',
+    profileSec: 'Boost Profile',
+    prof1: 'Aggressive',
+    prof1Sub: 'Fastest',
+    prof2: 'Balanced',
+    prof2Sub: 'Cooler',
+    prof3: 'Stock',
+    prof3Sub: 'Off',
+    gearHintDefault: 'Takes effect ~2s after switching. "Stock" hands control back; select a boost profile to re-enable.<br>For temporary pause, use Pause Boost on Home.',
+    currSettingsSec: 'Current Settings',
+    votNoteHtml: 'Injected = <b>Limit × Thermal Derate</b>, not a constant current.<br>Default <b id="votIbatDef">15600</b> mA = <b>Device DT Calibration</b> (vivo,fchg-curr-max-ma = 15600).<br><b>15600 × 4.50V ≈ 70.2W is theoretical battery ceiling</b>; actual power depends on adapter protocol & PDO max current.',
+    hwDirectTitle: 'Hardware Direct Control',
+    hwDirectSub: 'Takes over DCHG_FCC directly via vfcs_class (VFCS_CLASS_EVENT)',
+    btnSave: 'Save',
+    segCurrSec: 'Segment Currents',
+    thSocRange: 'SOC Range',
+    thReqCurr: 'Request Current',
+    segNoteHtml: 'Actual inject = <b>min(segment value, Limit × Thermal Derate)</b>.<br>Segment values can only <b>reduce</b> current and never exceed the Total Limit.<br>Setting all 5 equal = no per-SOC step-down (recommended).',
+    btnSaveSegs: 'Save Segments',
+    effInjectSec: 'Effective Inject Value',
+    effInjectDesc: 'Calculated automatically by daemon (<b>no input needed</b>):<br><b>Total Limit × Thermal Derate</b><br>Current result: ',
+    staticCapSec: 'Static Cap',
+    staticCapNoteHtml: 'Enter <b>0</b> = no extra cap (recommended; governed by Limit × Thermal Derate).',
+    thermSec: 'Thermal Control',
+    thermEnTitle: 'Enable Thermal Control',
+    thermEnSub: 'If disabled, temperature no longer throttles current',
+    thermStartLbl: 'Throttle Start',
+    thermStopLbl: 'Release Control',
+    boardUnit: 'Board 0.1°C',
+    thermNoteHtml: 'Unit 0.1°C: 460 = 46.0°C. Defaults: 46.0°C start throttling, 54.0°C release.<br>Caps <b>board temp</b>; battery has fixed 40.5°C protection (stricter wins).',
+    socStopTitle: 'Stop Boost SOC',
+    socStopDescHtml: 'Hands control back to stock once battery level reaches this threshold.<br>Drag to <b>100%</b> to manage through full charge.',
+    thermTiersTitle: 'Current Thermal Tiers',
+    creditEdition: 'V2507A Native Edition',
+    creditInfoHtml: 'Dimensity 9400+ (MT6991) · DCHG_FCC Direct<br>See module info for version',
+    navHome: 'Home',
+    navCharging: 'Charging',
+    navAdvanced: 'Advanced',
+    cancel: 'Cancel',
+    confirm: 'Confirm',
+    segNames: ['Low SOC','Mid-Low','Mid SOC','Mid-High','High SOC'],
+    svcRun: 'Active',
+    svcStop: 'Stopped',
+    svcIdle: 'Standby',
+    svcBad: 'Conn Error',
+    svcFail: 'Failed',
+    pwIdle: 'Idle',
+    pwUnplugged: 'Charger unplugged',
+    pwInMeas: 'Input measured',
+    pwBattMeas: 'Batt measured',
+    boardLbl: 'Board',
+    battLbl: 'Batt',
+    chgTag: 'Chg',
+    disTag: 'Dis',
+    metaNode: 'Node',
+    metaIn: 'In',
+    metaOcv: 'OCV pack',
+    metaVfloat: 'vfloat cell',
+    metaTherm: 'Thermal',
+    thermStates: ['Normal','Warn','Step A','Step B','Stock Control'],
+    srcSnap: ' · Last snapshot, updating',
+    srcStale: ' · Cached data, updating',
+    dtUnreadableTitle: 'Stock profile: DT segment table unreadable',
+    dtUnreadableBody: 'Using the pre-intervention backed-up node value (or safe fallback) when restoring Stock. Charging boost is unaffected, though the Stock restore current may differ from factory default.',
+    dtUnreadableTip: 'Troubleshoot via CLI: sh {bin} factory raw',
+    tip: 'Tip',
+    dischargeTip: ' Discharge below {max}% before replugging to apply immediately.',
+    profNames: {1:'Aggressive', 2:'Balanced', 3:'Stock'},
+    capMaxDt: ' (Max {mx} mA · DT {dt} mA)',
+    capMaxOnly: ' (Max {mx} mA)',
+    gearStockHint: 'Stock profile: handed back to system.',
+    gearActiveHint: 'Active profile: "{name}".{cap}',
+    badInvalid: 'Invalid',
+    badExceeds: 'Exceeds 0~{cap}',
+    badStopChg: 'Stops charging',
+    badDrop13w: 'Drops to ~13W',
+    badNonDt: 'Non-DT step',
+    valRangeReverted: 'Value must be 0~{cap}; reverted',
+    saveSegsCnt: 'Save Segments ({n})',
+    votMissingTitle: 'Direct control not available in this version',
+    votMissingBody: 'Backend did not return direct-control status; flash v3.5.11+.',
+    votTgtDchg: 'Charge limit (mA)',
+    votTgtUserFcc: 'Charge limit',
+    votTgtUserIbat: 'Batt current (% domain, deprecated)',
+    votTgtUserIbus: 'Input bus',
+    votTgtUserInput: 'Input side (% domain, deprecated)',
+    votTgtUsbIcl: 'Input limit',
+    unresolved: 'unresolved',
+    votSupported: '✓ Hardware Direct Control supported',
+    votTargetLbl: 'Target',
+    votLimitLbl: 'Limit {v} mA.',
+    votDirectOn: 'Direct control ON',
+    votUnsupported: '✗ Hardware Direct Control unsupported',
+    unknownReason: 'Unknown reason',
+    archDiffNote: 'Architectural difference, not an error.',
+    logOnToast: 'Runtime logging enabled',
+    logOffToast: 'Runtime logging disabled',
+    toggleFail: 'Toggle failed: {e}',
+    disabled: 'Disabled',
+    ocMaxTxt: 'Max {v}',
+    dtSpecTxt: 'DT spec {v}',
+    votMinErr: 'Min 1000 (avoids stalling charge)',
+    votMaxErr: 'Max {cap} (device DT current limit)',
+    thermMax1200: 'Max 1200 (=120.0°C)',
+    outOfRange: 'Value out of range',
+    saving: 'Saving...',
+    savedDirect: 'Saved {n} direct-control setting(s)',
+    writeFailed: 'Write failed',
+    saveCommErr: 'Save failed: module communication error',
+    thermNoBackendTitle: 'Thermal settings unsupported in this version',
+    thermNoBackendBody: 'Backend did not return therm field; please flash v3.5.11+.',
+    thermLive: 'Live readings: Board <b>{tb}</b> · Batt <b>{tc}</b>',
+    thermEnLine: '<b style="color:var(--ok)">Thermal Control Enabled</b>: stricter of board & battery wins.',
+    thermDisLine: '<b style="color:var(--danger,#e5484d)">⚠ Thermal Control Disabled</b>: all thermal caps off; use briefly with good cooling only.',
+    thermOffList: 'Thermal control disabled; limits inactive.',
+    thermBadOrder: 'Release temp must be higher than throttle start temp.',
+    tierNormal: 'Normal -> below {t}',
+    tierWarn: 'Warn -> from {t} (SOC step down 1 tier)',
+    tierStepA: 'Step A -> {t}',
+    tierStepB: 'Step B -> {t}',
+    tierRelease: 'Release -> >= {t} (stop writing node)',
+    tierRecover: 'Recover -> <= {t} and hold briefly',
+    battFixedLine: 'Battery temp (fixed): Warn {w} / Release {r}',
+    derate4Step: '4-step linear derate: T1={t1} T2={t2} T3={t3} T4={t4} T5={t5}',
+    safeNoBackendTitle: 'Backend did not return static cap data',
+    safeNoBackendBody: 'Please verify module scripts and WebUI versions match (or re-flash module).',
+    safeQcom: 'Snapdragon device: module <b>directly controls charging current</b>.',
+    safeMtkDirect: 'Dimensity device (V2507A): <b>directly overrides DCHG_FCC limit</b> via vfcs_class.',
+    safeMtkReq: 'Dimensity device: module <b>requests current from system</b>.',
+    safeUnknownDev: 'Unrecognized device class:',
+    safeHintTail: 'Limits the <b>ceiling</b> only; leave at 0 for normal use.',
+    safeStatHtml: 'Static cap: {cap} · Platform: <b>{plat}</b>{model}',
+    socCurTxt: ' · Current SOC <b>{s}%</b>',
+    socReached: ' (<span style="color:var(--warn,#d97706)">stop threshold reached, handed back</span>)',
+    socBelow: ' ({d}% below stop)',
+    socFullBody: '<b>Manage until full</b>: no upper SOC cap; system handles final trickle phase. Natural CMS derating keeps top-off safe.',
+    socNearFullBody: 'Stops near full: hands back after <b>{v}%</b>. System derates high-SOC current natively regardless.',
+    socLowBody: '<span style="color:var(--warn,#d97706)">Low threshold</span>: stops at <b>{v}%</b>, only boosting low SOC. Slide up for faster full charge.',
+    socMidBody: 'Stops writing above <b>{v}%</b>, letting vivo handle its factory CV taper.',
+    thermRangeErr: 'Temp must be 30.0~100.0°C (enter 300~1000)',
+    safeRangeErr: 'Static cap must be 0~{cap} mA (0 = unlimited)',
+    warnThermOff: '- Thermal Control [OFF]: both board and battery temp caps are disabled; current follows SOC table only until kernel 80°C hard cutoff (abrupt power drop instead of smooth step-down).',
+    warnThermStart: '- Throttle start temp {t}°C: very close to kernel 80°C hard cutoff; throttling kicks in very late.',
+    warnThermStop: '- Release temp {t}°C: effectively bypasses thermal release, relying on kernel hard cutoff.',
+    savedSettings: 'Saved {n} setting(s)',
+    confirmWeakTherm: 'Confirm weakened thermal protection:\n\n{w}\n\nYour choice — please confirm you understand the thermal risk before saving.',
+    confirmWeakOk: 'I Understand, Save',
+    confirmWeakCancel: 'Go Back',
+    confirmRestoreMsg: 'Restore Stock profile?\n\nThis will:\n- Stop daemon and switch to Stock (remains off after reboot)\n- Hand charging current control back to stock scheduler\n- Reset fchg_fcc_ma override to factory idle\n- Clear session and protocol state\n\nConfig files and module remain installed.\nNote: re-enabling boost requires picking a profile here again.\nUse "Pause Boost" above for a temporary pause instead.',
+    restoring: 'Restoring...',
+    stockWhyInactive: 'Stock profile: module stopped, charging managed by system.',
+    restoredSlow: 'Restored stock (slow reply; local state updated)',
+    restoredOk: 'Restored to stock',
+    restoreFail: 'Restore failed: {e}',
+    restoreCommErr: 'Restore failed: module communication error',
+    restoreBtnOk: 'Restore',
+    checking: 'Checking... (~12s)',
+    samplingMsg: 'Sampling for 10s to measure live CPU usage of daemon and watchdog...',
+    scriptNotFound: 'Module script not found; verify module is installed and enabled.',
+    commTimeout: 'Module communication timed out (aborted)',
+    noOutput: 'No output',
+    checkFailed: 'Check failed: {m}',
+    healthOk: 'All Healthy',
+    healthWarn: 'Warning',
+    healthFail: 'Issue Detected',
+    upSec: ' · up {n}s',
+    upMin: ' · up {n}m',
+    upHr: ' · up {n}h',
+    selfCpuTitle: 'Module Self CPU',
+    selfCpuDesc: 'Self CPU = actual process CPU (cumulative / uptime); does not grow over time.',
+    selfCpuEarly: 'Daemon uptime < 2m; average CPU sample insufficient (hidden).',
+    tooEarly: 'Too early',
+    daemonLbl: 'Daemon',
+    watchdogLbl: 'Watchdog',
+    diagChildSum: 'Diag · Child CPU Sum',
+    diagChildDesc: '<b>Cumulative</b> CPU of forked subshells (sleep/cat/awk) since start; represents total historical work, <b>not current load</b>.',
+    idleWord: 'Idle',
+    winCpuTitle: 'Window CPU Usage',
+    idleInWindow: 'Idle in window',
+    winTicksLbl: 'Window ticks',
+    sampleWinLbl: 'Sample Window',
+    idleWindowHint: '"Idle in window" is normal: when unplugged, daemon wakes only every 20s. Refer to "Module Self CPU" above.',
+    runningPid: 'Running · PID {pid}',
+    stoppedWord: 'Stopped',
+    heartbeatLbl: 'Heartbeat',
+    noRecord: 'No record',
+    secsAgo: '{s}s ago',
+    chargerLbl: 'Charger',
+    connectedWord: 'Connected',
+    unpluggedWord: 'Unplugged',
+    battStatusLbl: 'Battery Status',
+    socLbl: 'SOC',
+    activeProfLbl: 'Active Profile',
+    injectChLbl: 'Inject Ch {tgt}',
+    stuckForceHint: '⚠ Unplugged yet force_active=1 (possible leftover override from last charge).',
+    logSizeLbl: 'Log Size',
+    versionLbl: 'Version',
+    healthHelpHtml: 'Screenshot this summary to help diagnose the issue.<br>For full logs, tap "Export Debug Bundle".',
+    dumpBusy: 'Collecting & archiving...',
+    dumpWaitMsg: 'Collecting debug snapshot (~5-15s)...\nIncludes: module state / charging / DT / voter / sysfs / dmesg / props / procs',
+    dumpMissing: 'Failed: logdump.sh not found\nExpected at:\n  {p}',
+    dumpMissingToast: 'logdump.sh not found',
+    dumpDone: '✔ Generated (read-only; no settings changed)',
+    dumpFile: 'File: {p}',
+    dumpShareHint: 'Check /sdcard/Download in your file manager to share the archive.',
+    dumpCreatedToast: 'Debug bundle created',
+    dumpFailOut: 'Failed (code {code})\n{msg}',
+    dumpFailToast: 'Export failed; see details below',
+    dumpCommErr: 'Failed: module communication error (timeout or denied)',
+    dumpCommToast: 'Export failed: comm error',
+    errTimeout: 'Read timed out (waited > 15s)\n\nCommon causes:\n- Very low temp/SOC slows sensor reads -> plug in charger and retry\n- System just booted and background I/O is busy -> wait 1m\n- First-run DT cache building -> wait ~5-10s\n\nRun in terminal to inspect timing:\ntime sh {bin} getjson',
+    errScript: 'Module script error: {err}\n\nCheck module file integrity/permissions or re-flash.',
+    errNoOut: 'No output from module\n\nPossible causes:\n- Module not installed, disabled, or uninstalled\n- Reboot required after flashing in KernelSU\n\nEnsure module is enabled -> reboot -> reopen WebUI.',
+    errBadJson: 'Invalid JSON response ({len} bytes)\n\nFirst 80 chars: {head}\n\nVersion mismatch between module script and WebUI.',
+    pauseCurOn: '<b style="color:var(--warn,#d97706)">Status: Temporarily Paused</b><br>Overrides cleared; charging handled by system.',
+    pauseCurActive: '<b style="color:var(--ok,#30a46c)">Status: Boost Active</b>',
+    pauseDaemonOff: '<br>(Daemon not running; tap "Resume Boost" to restart)',
+    askPauseMsg: 'Temporarily pause boost?\n\n- Clears all overrides while keeping config across reboots\n- Tap "Resume Boost" later to re-enable\n\nIdeal for slow or car chargers.',
+    pausing: 'Pausing...',
+    pausedToast: 'Boost paused',
+    pauseFail: 'Pause failed: {e}',
+    pauseCommErr: 'Pause failed: module communication error',
+    pauseBtnOk: 'Pause',
+    resuming: 'Resuming...',
+    resumedToast: 'Boost resumed',
+    resumeFail: 'Resume failed: {e}',
+    resumeCommErr: 'Resume failed: module communication error',
+    segWhoSelf: 'segment value',
+    segWhoLimit: 'limit x derate',
+    segHintInRange: 'At <b>{soc}%</b> (<b>{lbl}</b>), segment requests <b>{val} mA</b>.<br>',
+    segHintOutRange: 'At <b>{soc}%</b>, SOC is outside active range (idle).<br>',
+    segHintEff: 'Effective inject ~ <b>{v} mA</b> (capped by {who})',
+    segHintTherm: '<br><span style="color:var(--warn,#d97706)">Thermal derating active; limit throttled to {g} mA</span>',
+    inspectCmdHint: '\n\nRun this to inspect:\nsh {bin} getjson',
+    readFailErr: 'Failed to read status:\n{msg}',
+    askStockMsg: 'Switch to Stock profile? This stops boosting and returns control to the system.\n\nThe module will restore charging current in order:\n1. Restore original backed-up node value (factory state)\n2. Fallback to DT table request limit if backup missing\n3. Fallback to safe default value\n\nThe daemon will exit and stop writing. Continue?',
+    switchBtn: 'Switch',
+    switching: 'Switching...',
+    switchedSlow: 'Switched to {name} (slow reply; local state updated)',
+    switchedOk: 'Switched to {name}',
+    switchFail: 'Switch failed: {e}',
+    savedChanges: 'Saved {n} change(s)',
+    askDirectMsg: 'Enable hardware direct control?\n\nThe module will bypass system request scheduling and directly force DCHG_FCC current.\n\n- No system secondary verification safeguard\n- Recommended to test with a lower Total Current Limit first\n\nEnable now?',
+    enableWord: 'Enable',
+    askThermOffMsg: 'Disable thermal control?\n\nAll temperature limits will be ignored and charging may hit kernel 80°C hard cutoff.\n\nDisable anyway?',
+    disableWord: 'Disable',
+    notKsuErr: 'Not running inside KernelSU Manager (preview mode; settings cannot be saved).\nOpen this page from the Modules tab in KernelSU Manager.'
+  }
+};
+
+function tr(key, vars){
+  var dict = I18N[LANG] || I18N.vi;
+  var s = (dict[key] !== undefined) ? dict[key] : ((I18N.en[key] !== undefined) ? I18N.en[key] : key);
+  if (vars && typeof s === 'string'){
+    for (var k in vars){
+      if (vars.hasOwnProperty(k)) s = s.split('{' + k + '}').join(String(vars[k]));
+    }
+  }
+  return s;
+}
+
+function trBackend(s){
+  if (LANG === 'en' || !s) return s;
+  s = String(s);
+  var exact = {
+    'Charger unplugged; idle': 'Chưa cắm sạc; đang nghỉ',
+    'Cannot read battery level (SOC); standing by': 'Không đọc được mức pin (SOC); tạm chờ',
+    'No temperature sensors readable; standing by conservatively (check board temp node)': 'Không đọc được cảm biến nhiệt; tạm ngừng can thiệp (kiểm tra node nhiệt độ bo)',
+    'Temperature too low; holding off (high current risks lithium plating)': 'Nhiệt độ quá thấp; tạm ngưng (dòng cao dễ mạ lithium)',
+    'Temperature too high; released to stock thermal control': 'Nhiệt độ quá cao; đã trả về kiểm soát nhiệt mặc định',
+    'Daemon not running': 'Daemon chưa chạy',
+    'Watchdog not running (daemon alive)': 'Watchdog chưa chạy (daemon vẫn sống)',
+    'Charging': 'Đang sạc',
+    'Discharging': 'Đang xả',
+    'Full': 'Đầy',
+    'Not charging': 'Không sạc',
+    'Stock profile: module stopped, charging managed by system.': 'Cấu hình Nguyên bản: module đã dừng, hệ thống tự quản lý sạc.'
+  };
+  if (exact[s]) return exact[s];
+  var m;
+  if ((m = s.match(/^Node (.+) missing on this device; cannot intervene$/)))
+    return 'Máy thiếu node ' + m[1] + ', module không thể can thiệp';
+  if ((m = s.match(/^SOC (\d+)% below active floor (\d+)%; handed back for trickle charge$/)))
+    return 'Pin ' + m[1] + '% thấp hơn ngưỡng ' + m[2] + '%, đã trả hệ thống sạc nhỏ giọt';
+  if ((m = s.match(/^SOC (\d+)% exceeds your stop threshold (\d+)%;/)))
+    return 'Pin ' + m[1] + '% vượt mức ngừng bạn đã đặt (' + m[2] + '%); module đã nghỉ (chỉnh ở Nâng cao → Ngừng tăng tốc ở mức pin)';
+  if ((m = s.match(/^SOC (\d+)% exceeds active limit (\d+)%;/)))
+    return 'Pin ' + m[1] + '% vượt giới hạn hiệu lực ' + m[2] + '%; module nghỉ để bảo vệ pin';
+  if ((m = s.match(/^Heartbeat stopped (\d+)s ago; daemon may be hung$/)))
+    return 'Nhịp tim dừng ' + m[1] + ' giây trước; daemon có thể đã treo';
+  if ((m = s.match(/^Daemon avg CPU (.+) \(> 2\.00%\)$/)))
+    return 'CPU trung bình daemon ' + m[1] + ' (vượt ngưỡng 2.00%)';
+  if ((m = s.match(/^Watchdog avg CPU (.+) \(> 1\.00%\)$/)))
+    return 'CPU trung bình watchdog ' + m[1] + ' (vượt ngưỡng 1.00%)';
+  if ((m = s.match(/^Unplugged daemon avg CPU (.+) \(> 0\.50%\)$/)))
+    return 'Đã rút sạc nhưng CPU trung bình daemon ' + m[1] + ' (vượt ngưỡng 0.50%)';
+  if ((m = s.match(/^No pmic-votable and (.+) unavailable$/)))
+    return 'Không có pmic-votable và ' + m[1] + ' không khả dụng';
+  return s;
+}
+
+function applyI18n(){
+  try { document.documentElement.lang = LANG; } catch(e){}
+  try { document.title = tr('title'); } catch(e){}
+
+  var lbtns = document.querySelectorAll('#langSw .lang-btn');
+  for (var i = 0; i < lbtns.length; i++){
+    setElClass(lbtns[i], 'lang-btn' + (lbtns[i].getAttribute('data-lang') === LANG ? ' on' : ''));
+  }
+
+  var tEls = document.querySelectorAll('[data-i18n]');
+  for (i = 0; i < tEls.length; i++){
+    var k = tEls[i].getAttribute('data-i18n');
+    if (k) tEls[i].textContent = tr(k);
+  }
+  var hEls = document.querySelectorAll('[data-i18n-html]');
+  for (i = 0; i < hEls.length; i++){
+    var hk = hEls[i].getAttribute('data-i18n-html');
+    if (hk) hEls[i].innerHTML = tr(hk);
+  }
+
+  SEG_NAMES = tr('segNames');
+  VOT_TITLES = { votIbat: tr('totalLimitLbl') };
+
+  setServiceState(SERVICE_STATE || '');
+
+  if (typeof BRIDGE !== 'undefined' && BRIDGE && BRIDGE !== 'ksu'){
+    showErr(tr('notKsuErr'));
+  }
+
+  if (STATE && STATE.data){
+    renderAll(STATE.data);
+    buildTable(STATE.data);
+    markCurSeg(STATE.data);
+    renderSegHint(STATE.data);
+    syncDirty();
+  } else {
+    buildPlaceholderTable();
+    var cMode = $('capMode');
+    if (cMode) cMode.textContent = tr('reqLimitBadge');
+    setText('tSub', tr('boardLbl') + ' — · ' + tr('battLbl') + ' —');
+  }
+  if (typeof HEALTH_LAST !== 'undefined' && HEALTH_LAST && $('healthOut') && $('healthOut').innerHTML){
+    renderHealthSummary(HEALTH_LAST);
+  }
+  try { window.dispatchEvent(new Event('resize')); } catch(e){}
+}
+
+function setLang(l){
+  var next = (l === 'en') ? 'en' : 'vi';
+  if (next === LANG) return;
+  LANG = next;
+  try { localStorage.setItem(LANG_KEY, LANG); } catch(e){}
+  applyI18n();
+}
+
 // ============================================================
 //  自绘确认框（★ 不要用原生 confirm/alert）
 // ============================================================
@@ -2374,12 +3067,12 @@ function askConfirm(msg, onOk, opt){
 
   var btnC = document.createElement('button');
   btnC.className = 'ask-btn';
-  btnC.textContent = opt.cancel || 'Cancel';
+  btnC.textContent = opt.cancel || tr('cancel');
   btnC.onclick = function(){ close(); };
 
   var btnO = document.createElement('button');
   btnO.className = 'ask-btn' + (opt.danger ? ' danger' : ' primary');
-  btnO.textContent = opt.ok || 'Confirm';
+  btnO.textContent = opt.ok || tr('confirm');
   btnO.onclick = function(){
     close();
     if (typeof onOk === 'function') onOk();
@@ -2422,7 +3115,7 @@ function segLabel(b, key){
   return m[key] || key;
 }
 var SEG_KEYS  = ['low','mid','peak','mid2','low2'];
-var SEG_NAMES = ['Low SOC','Mid-Low','Mid SOC','Mid-High','High SOC'];
+var SEG_NAMES = tr('segNames');
 
 // 当前 SOC 属于哪一段
 function curSeg(soc, b){
@@ -2490,11 +3183,11 @@ function setServiceState(st){
   var txt   = $('svcTxt');
 
   var T = {
-    run:  ['Active',     'st-ok',   'on',  'Running'],
-    stop: ['Stopped',    'st-idle', 'off', 'Stopped'],
-    idle: ['Standby',    'st-idle', 'off', 'Standby'],
-    bad:  ['Conn Error', 'st-bad',  'off', 'Failed']
-  }[st] || ['—', 'st-idle', 'off', '—'];
+    run:  [tr('svcRun'),  'st-ok',   'on',  tr('svcRun')],
+    stop: [tr('svcStop'), 'st-idle', 'off', tr('svcStop')],
+    idle: [tr('svcIdle'), 'st-idle', 'off', tr('svcIdle')],
+    bad:  [tr('svcBad'),  'st-bad',  'off', tr('svcFail')]
+  }[st] || [tr('loading'), 'st-idle', 'off', tr('loading')];
 
   setText('miTitle', T[0]);
   // 圆圈：st-ok 无附加类（默认黑对勾），其余加状态类
@@ -2560,8 +3253,8 @@ function renderMonitor(d){
   var pw = d.power;
 
   if (!isCharging){
-    setHTML('vPower', 'Idle');
-    setText('pSub', 'Charger unplugged');
+    setHTML('vPower', tr('pwIdle'));
+    setText('pSub', tr('pwUnplugged'));
     setAttr('mPower', 'data-lv', '');
   } else if (pw === null || pw === undefined){
     setHTML('vPower', '—<small>W</small>');
@@ -2572,7 +3265,7 @@ function renderMonitor(d){
     setHTML('vPower', pwTxt + '<small>W</small>');
     pulseIfChanged('pw', $('vPower'), pwTxt);
     setAttr('mPower', 'data-lv', pwW >= 35 ? 'hi' : (pwW >= 20 ? 'mid' : 'lo'));
-    setText('pSub', d.powerSrc === 'in' ? 'Input measured' : 'Batt measured');
+    setText('pSub', d.powerSrc === 'in' ? tr('pwInMeas') : tr('pwBattMeas'));
   }
 
   // ---- Temp (dual source) ----
@@ -2580,8 +3273,8 @@ function renderMonitor(d){
   var tc = (d.tempBatt  === null || d.tempBatt  === undefined) ? null
          : (d.temp && d.tempBoard === undefined ? d.temp / 10 : d.tempBatt / 10);
   if (tb === null && tc === null && d.temp !== null && d.temp !== undefined){ tb = d.temp / 10; }
-  setText('tSub', 'Board ' + (tb === null ? '—' : tb.toFixed(1) + '°C')
-                 + ' · Batt ' + (tc === null ? '—' : tc.toFixed(1) + '°C'));
+  setText('tSub', tr('boardLbl') + ' ' + (tb === null ? '—' : tb.toFixed(1) + '°C')
+                 + ' · ' + tr('battLbl') + ' ' + (tc === null ? '—' : tc.toFixed(1) + '°C'));
 
   if (tb === null && tc === null){
     setHTML('vTemp', '—<small>°C</small>');
@@ -2630,7 +3323,7 @@ function renderMonitor(d){
   } else {
     var sign = ia > 0 ? '+' : '';
     var iaTxt = ia.toFixed(2);
-    var tag = ia > 0.05 ? 'Chg' : (ia < -0.05 ? 'Dis' : '');
+    var tag = ia > 0.05 ? tr('chgTag') : (ia < -0.05 ? tr('disTag') : '');
     setHTML('vIbat', sign + iaTxt + '<small>A</small>' + (tag ? '<i class="cvtag">' + tag + '</i>' : ''));
     pulseIfChanged('ibat', $('vIbat'), sign + iaTxt + tag);
   }
@@ -2638,13 +3331,13 @@ function renderMonitor(d){
 
   // ---- Bottom metadata row ----
   var bits = [];
-  bits.push('Node ' + (d.node === null ? '—' : d.node + ' mA'));
-  if (d.ibus !== null) bits.push('In ' + Math.round(d.ibus) + ' mA');
-  if (d.ocv !== null)  bits.push('OCV pack ' + Math.round(d.ocv / 1000) + ' mV');
-  if (d.vfloat !== null) bits.push('vfloat cell ' + Math.round(d.vfloat) + ' mV');
+  bits.push(tr('metaNode') + ' ' + (d.node === null ? '—' : d.node + ' mA'));
+  if (d.ibus !== null) bits.push(tr('metaIn') + ' ' + Math.round(d.ibus) + ' mA');
+  if (d.ocv !== null)  bits.push(tr('metaOcv') + ' ' + Math.round(d.ocv / 1000) + ' mV');
+  if (d.vfloat !== null) bits.push(tr('metaVfloat') + ' ' + Math.round(d.vfloat) + ' mV');
   if (d.thermState !== null){
-    var ts = ['Normal','Warn','Step A','Step B','Stock Control'][d.thermState];
-    if (ts) bits.push('Thermal ' + ts);
+    var ts = tr('thermStates')[d.thermState];
+    if (ts) bits.push(tr('metaTherm') + ' ' + ts);
   }
   setHTML('metaHint', bits.join(' · ').replace(/</g,'&lt;'));
 
@@ -2653,8 +3346,8 @@ function renderMonitor(d){
   var lbl = ('0' + now.getHours()).slice(-2) + ':' +
             ('0' + now.getMinutes()).slice(-2) + ':' +
             ('0' + now.getSeconds()).slice(-2);
-  if (d && d._src === 'snap')       lbl += ' · Last snapshot, updating';
-  else if (d && d._src === 'stale') lbl += ' · Cached data, updating';
+  if (d && d._src === 'snap')       lbl += tr('srcSnap');
+  else if (d && d._src === 'stale') lbl += tr('srcStale');
   setText('updTxt', lbl);
 }
 
@@ -2674,19 +3367,17 @@ function renderFactory(d){
   box.innerHTML = '';
 
   var line1 = document.createElement('div');
-  line1.innerHTML = '<b>Stock profile: DT segment table unreadable</b>';
+  line1.innerHTML = '<b>' + escapeHtml(tr('dtUnreadableTitle')) + '</b>';
   box.appendChild(line1);
 
   var step = document.createElement('div');
   step.className = 'capstep';
-  step.textContent =
-    'Using the pre-intervention backed-up node value (or safe fallback) when restoring Stock. ' +
-    'Charging boost is unaffected, though the Stock restore current may differ from factory default.';
+  step.textContent = tr('dtUnreadableBody');
   box.appendChild(step);
 
   var tip = document.createElement('div');
   tip.className = 'capstep';
-  tip.textContent = 'Troubleshoot via CLI: sh ' + BIN + ' factory raw';
+  tip.textContent = tr('dtUnreadableTip', {bin: BIN});
   box.appendChild(tip);
 }
 
@@ -2704,13 +3395,12 @@ function renderWhy(d){
   var extra = '';
   if (d.soc !== null && d.soc !== undefined && d.bounds &&
       d.soc > d.bounds.max){
-    extra = ' Discharge below ' + d.bounds.max +
-            '% before replugging to apply immediately.';
+    extra = tr('dischargeTip', {max: d.bounds.max});
   }
 
   bar.style.display = '';
-  bar.innerHTML = '<span class="wi">Tip</span><span>' +
-                  escapeHtml(why) + escapeHtml(extra) + '</span>';
+  bar.innerHTML = '<span class="wi">' + escapeHtml(tr('tip')) + '</span><span>' +
+                  escapeHtml(trBackend(why)) + escapeHtml(extra) + '</span>';
 }
 
 // 最小 HTML 转义。★ v3.5.11 补上引号：
@@ -2733,24 +3423,24 @@ function renderTabs(d){
     var a = parseInt(tabs[i].getAttribute('data-a'), 10);
     setElClass(tabs[i], 'tab' + (a === d.active ? ' on' : ''));
   }
-  var names = {1:'Aggressive', 2:'Balanced', 3:'Stock'};
+  var names = tr('profNames');
 
   var capTxt = '';
   if (d.calMax !== null && d.calMax !== undefined && Number(d.calMax) > 0){
     var _mx = Number(d.calMax);
     var _dt = (d.calDt !== null && d.calDt !== undefined) ? Number(d.calDt) : 0;
     if (_dt > 0 && _dt !== _mx){
-      capTxt = ' (Max ' + _mx + ' mA · DT ' + _dt + ' mA)';
+      capTxt = tr('capMaxDt', {mx: _mx, dt: _dt});
     } else {
-      capTxt = ' (Max ' + _mx + ' mA)';
+      capTxt = tr('capMaxOnly', {mx: _mx});
     }
   }
 
   if (d.active === 3){
-    setText('gearHint', 'Stock profile: handed back to system.');
+    setText('gearHint', tr('gearStockHint'));
   } else {
     setText('gearHint',
-      'Active profile: "' + (names[d.active] || d.active) + '".' + capTxt);
+      tr('gearActiveHint', {name: (names[d.active] || d.active), cap: capTxt}));
   }
 }
 
@@ -2814,7 +3504,7 @@ function buildTable(d){
     //   同一口径推导出的 effCap。effCap 由 buildTable 入口算好传进来。
     inp.max = String(effCap);
     inp.step = '1';
-    inp.value = String(d.cal[key]);
+    inp.value = String((STATE.dirty && STATE.dirty[key] !== undefined) ? STATE.dirty[key] : d.cal[key]);
     inp.addEventListener('input', onInput);
     inp.addEventListener('blur', onInputBlur);
     wrap.appendChild(inp);
@@ -2946,7 +3636,7 @@ function onInput(ev){
   if (raw === ''){ this.className = ''; setBadge(key, ''); return; }
 
   var n = parseInt(raw, 10);
-  if (isNaN(n)){ this.className = 'danger'; setBadge(key, 'Invalid'); return; }
+  if (isNaN(n)){ this.className = 'danger'; setBadge(key, tr('badInvalid')); return; }
 
   var cap = parseInt(d.calMax, 10);
   if (isNaN(cap) || cap <= 0) cap = 15600;    // Fallback to device DT max if missing
@@ -2957,13 +3647,13 @@ function onInput(ev){
   // Out-of-range hint (do not overwrite while typing)
   if (n < 0 || n > cap){
     this.className = 'danger';
-    setBadge(key, 'Exceeds 0~' + cap);
+    setBadge(key, tr('badExceeds', {cap: cap}));
   } else if (n < danger){
     this.className = 'danger';
-    setBadge(key, n === 0 ? 'Stops charging' : 'Drops to ~13W');
+    setBadge(key, n === 0 ? tr('badStopChg') : tr('badDrop13w'));
   } else if (validList.length && validList.indexOf(String(n)) < 0){
     this.className = 'changed';
-    setBadge(key, 'Non-DT step');
+    setBadge(key, tr('badNonDt'));
   } else {
     var cur = parseInt(d.cal ? d.cal[key] : NaN, 10);
     this.className = (n === cur) ? '' : 'changed';
@@ -2995,7 +3685,7 @@ function onInputBlur(ev){
     this.className = '';
     setBadge(key, '');
     syncDirty();
-    if (raw !== '') noticeOnce('Value must be 0~' + cap + '; reverted');
+    if (raw !== '') noticeOnce(tr('valRangeReverted', {cap: cap}));
   }
 }
 
@@ -3031,7 +3721,7 @@ function syncDirty(){
   var b = $('btnSave');
   if (b){
     b.disabled = !STATE.editing;
-    b.textContent = STATE.editing ? ('Save Segments (' + cnt + ')') : 'Save Segments';
+    b.textContent = STATE.editing ? tr('saveSegsCnt', {n: cnt}) : tr('btnSaveSegs');
   }
 }
 
@@ -3041,19 +3731,19 @@ function buildPlaceholderTable(){
   tb.innerHTML = '';
   var b = {min:5, t1:45, t2:60, t3:65, t4:75, max:84};
   for (var i = 0; i < SEG_KEYS.length; i++){
-    var tr = document.createElement('tr');
+    var trEl = document.createElement('tr');
 
     var td1 = document.createElement('td');
     td1.className = 'seg';
     td1.innerHTML = segLabel(b, SEG_KEYS[i]) +
       '<br><span style="opacity:.65">' + SEG_NAMES[i] + '</span>';
-    tr.appendChild(td1);
+    trEl.appendChild(td1);
 
     var td2 = document.createElement('td');
-    td2.innerHTML = '<span style="color:var(--dim)">Loading...</span>';
-    tr.appendChild(td2);
+    td2.innerHTML = '<span style="color:var(--dim)">' + escapeHtml(tr('loading')) + '</span>';
+    trEl.appendChild(td2);
 
-    tb.appendChild(tr);
+    tb.appendChild(trEl);
   }
 }
 
@@ -3070,7 +3760,7 @@ function markCurSeg(d){
 
 var VOT_KEYS = ['votIbat'];
 var VOT_TITLES = {
-  votIbat:'Total Current Limit'
+  votIbat: tr('totalLimitLbl')
 };
 // 键名 -> setcal 的段名
 var VOT_SEG = {
@@ -3113,8 +3803,8 @@ function renderVoter(d){
   var hint = $('votHint');
 
   if (!v){
-    if (hint) hint.innerHTML = '<b>Direct control not available in this version</b><br>' +
-      'Backend did not return direct-control status; flash v3.5.11+.';
+    if (hint) hint.innerHTML = '<b>' + escapeHtml(tr('votMissingTitle')) + '</b><br>' +
+      escapeHtml(tr('votMissingBody'));
     setVoterDisabled(true);
     return;
   }
@@ -3122,26 +3812,26 @@ function renderVoter(d){
   // ---- Availability hint ----
   if (v.ready){
     var VOT_TGT_NAME = {
-      'DCHG_FCC':'Charge limit (mA)', 'USER_FCC':'Charge limit',
-      'USER_IBAT':'Batt current (% domain, deprecated)', 'USER_IBUS':'Input bus',
-      'USER_INPUT':'Input side (% domain, deprecated)', 'USB_ICL':'Input limit'
+      'DCHG_FCC': tr('votTgtDchg'), 'USER_FCC': tr('votTgtUserFcc'),
+      'USER_IBAT': tr('votTgtUserIbat'), 'USER_IBUS': tr('votTgtUserIbus'),
+      'USER_INPUT': tr('votTgtUserInput'), 'USB_ICL': tr('votTgtUsbIcl')
     };
     var tgtRaw = String(v.target || '').replace(/\s+/g, ' ').replace(/^ | $/g, '');
     var tgtName = tgtRaw ? tgtRaw.split(' ').map(function(n){
       return VOT_TGT_NAME[n] || n;
-    }).join(' + ') : 'unresolved';
+    }).join(' + ') : tr('unresolved');
     var devSysfs = (d && d.dev && d.dev.class === 'mtk');
-    hint.innerHTML = '<b style="color:var(--ok,#30a46c)">✓ Hardware Direct Control supported' +
+    hint.innerHTML = '<b style="color:var(--ok,#30a46c)">' + escapeHtml(tr('votSupported')) +
       (devSysfs ? ' (vfcs_class → DCHG_FCC)' : '') + '</b><br>' +
-      'Target: <b>' + escapeHtml(tgtName) + '</b>' +
+      escapeHtml(tr('votTargetLbl')) + ': <b>' + escapeHtml(tgtName) + '</b>' +
       (tgtRaw && tgtRaw !== tgtName ? ' (' + escapeHtml(tgtRaw) + ')' : '') +
-      ', Limit ' + escapeHtml(v.ibat) + ' mA.' +
-      (v.mode ? '<br><b style="color:var(--warn,#d97706)">Direct control ON</b>' : '');
+      ', ' + escapeHtml(tr('votLimitLbl', {v: v.ibat})) +
+      (v.mode ? '<br><b style="color:var(--warn,#d97706)">' + escapeHtml(tr('votDirectOn')) + '</b>' : '');
     setVoterDisabled(false);
   } else {
-    hint.innerHTML = '<b style="color:var(--danger,#e5484d)">✗ Hardware Direct Control unsupported</b><br>' +
-      escapeHtml(v.why || 'Unknown reason') +
-      '<br><span style="opacity:.75">Architectural difference, not an error.</span>';
+    hint.innerHTML = '<b style="color:var(--danger,#e5484d)">' + escapeHtml(tr('votUnsupported')) + '</b><br>' +
+      escapeHtml(trBackend(v.why || '') || tr('unknownReason')) +
+      '<br><span style="opacity:.75">' + escapeHtml(tr('archDiffNote')) + '</span>';
     setVoterDisabled(true);
   }
 
@@ -3217,15 +3907,15 @@ function bindLogEnRow(){
       exec('sh "' + BIN + '" setcal log_en ' + val, 15000).then(function(r){
         var s = String((r && r.stdout) || '');
         if (r && r.code === 0 && s.indexOf('OK') === 0){
-          toast(val ? 'Runtime logging enabled' : 'Runtime logging disabled', val ? 'ok' : 'hot');
+          toast(val ? tr('logOnToast') : tr('logOffToast'), val ? 'ok' : 'hot');
           if (STATE.data) STATE.data.logEn = val;
         } else {
           var err = s || ((r && r.stderr) ? r.stderr : '') || ('code ' + (r ? r.code : '?'));
-          toast('Toggle failed: ' + err.trim(), 'err');
+          toast(tr('toggleFail', {e: err.trim()}), 'err');
           renderLogEn(STATE.data);
         }
       }).catch(function(e){
-        toast('Toggle failed: ' + (e && e.message ? e.message : e), 'err');
+        toast(tr('toggleFail', {e: (e && e.message ? e.message : e)}), 'err');
         renderLogEn(STATE.data);
       });
     });
@@ -3336,8 +4026,8 @@ function renderOc(d){
   //   现在取 voter.target 的第一个名字，取不到就显示「未启用」。
   var _chOne = (d && d.voter && d.voter.target)
     ? String(d.voter.target).split(/\s+/).filter(Boolean)[0] : '';
-  setText('dvChan', _chOne || 'Disabled');
-  var modeTxt = oc ? 'Max ' + ocMax : 'DT spec ' + (dt > 0 ? dt : cur);
+  setText('dvChan', _chOne || tr('disabled'));
+  var modeTxt = oc ? tr('ocMaxTxt', {v: ocMax}) : tr('dtSpecTxt', {v: (dt > 0 ? dt : cur)});
   if ($('capMode')) $('capMode').textContent = modeTxt;
 
   // 第 2 页「实际注入值」
@@ -3363,11 +4053,11 @@ function votRange(key){
     if (cap > 20000) cap = 20000;
     return {
       lo: 1000, hi: cap,
-      low:  'Min 1000 (avoids stalling charge)',
-      high: 'Max ' + cap + ' (device DT current limit)'
+      low:  tr('votMinErr'),
+      high: tr('votMaxErr', {cap: cap})
     };
   }
-  return { lo: 0, hi: 1200, low: '', high: 'Max 1200 (=120.0°C)' };
+  return { lo: 0, hi: 1200, low: '', high: tr('thermMax1200') };
 }
 
 function onVotInput(ev){
@@ -3409,7 +4099,7 @@ function onVotBlur(ev){
   var r = votRange(key);
   if (isNaN(n) || n < r.lo || n > r.hi){
     this.className = 'danger';
-    noticeOnce((n < r.lo && r.low) ? r.low : (r.high || 'Value out of range'));
+    noticeOnce((n < r.lo && r.low) ? r.low : (r.high || tr('outOfRange')));
     return;
   }
   this.className = '';
@@ -3433,8 +4123,8 @@ function doSaveVoter(){
   }
   if (!jobs.length) return;
 
-  runJobs(jobs, $('btnVotSave'), 'Save', function(){
-    toast('Saved ' + jobs.length + ' direct-control setting(s)', 'ok');
+  runJobs(jobs, $('btnVotSave'), tr('btnSave'), function(){
+    toast(tr('savedDirect', {n: jobs.length}), 'ok');
     STATE.votDirty = null;
     STATE.votModeDirty = null;
     $('btnVotSave').disabled = true;
@@ -3466,7 +4156,7 @@ var SAFE_DEFAULTS = { safeCap:0 };
 // Batch job runner
 function runJobs(jobs, btn, label, onDone){
   if (!jobs || !jobs.length){ if (onDone) onDone(true); return; }
-  if (btn){ btn.disabled = true; btn.textContent = 'Saving...'; }
+  if (btn){ btn.disabled = true; btn.textContent = tr('saving'); }
 
   var parts = [];
   for (var i = 0; i < jobs.length; i++){
@@ -3479,14 +4169,14 @@ function runJobs(jobs, btn, label, onDone){
     var ok = (r.code === 0) && (out.indexOf('OK') === 0);
     if (btn){ btn.textContent = label; btn.disabled = false; }
     if (!ok){
-      toast((out || '').replace(/^ERR:\s*/, '') || 'Write failed', 'hot');
+      toast((out || '').replace(/^ERR:\s*/, '') || tr('writeFailed'), 'hot');
       if (onDone) onDone(false);
       return;
     }
     if (onDone) onDone(true);
   }, function(){
     if (btn){ btn.textContent = label; btn.disabled = false; }
-    toast('Save failed: module communication error', 'hot');
+    toast(tr('saveCommErr'), 'hot');
     if (onDone) onDone(false);
   });
 }
@@ -3530,8 +4220,8 @@ function renderTherm(d){
   var t = d && d.therm;
   var hint = $('thermHint');
   if (!t){
-    if (hint) hint.innerHTML = '<b>Thermal settings unsupported in this version</b><br>' +
-      'Backend did not return therm field; please flash v3.5.11+.';
+    if (hint) hint.innerHTML = '<b>' + escapeHtml(tr('thermNoBackendTitle')) + '</b><br>' +
+      escapeHtml(tr('thermNoBackendBody'));
     return;
   }
   var en = (STATE.thermEnDirty !== null) ? STATE.thermEnDirty : t.en;
@@ -3544,13 +4234,9 @@ function renderTherm(d){
     var cur = '';
     if (tb !== undefined && tb !== null && tb !== '' &&
         tc !== undefined && tc !== null && tc !== ''){
-      cur = '<br>Live readings: Board <b>' + escapeHtml(f10h(tb)) + '</b> · Batt <b>' + escapeHtml(f10h(tc)) + '</b>';
+      cur = '<br>' + tr('thermLive', {tb: escapeHtml(f10h(tb)), tc: escapeHtml(f10h(tc))});
     }
-    hint.innerHTML = (t.en == 1)
-      ? '<b style="color:var(--ok)">Thermal Control Enabled</b>: stricter of board & battery wins.'
-        + cur
-      : '<b style="color:var(--danger,#e5484d)">⚠ Thermal Control Disabled</b>: all thermal caps off; '
-        + 'use briefly with good cooling only.' + cur;
+    hint.innerHTML = ((t.en == 1) ? tr('thermEnLine') : tr('thermDisLine')) + cur;
   }
 
   fillNum('thermStart', 'start', t, THERM_DEFAULTS, STATE.thermDirty);
@@ -3570,29 +4256,26 @@ function renderTherm(d){
     if (isNaN(e)) e = 540;
     var f10 = function(n){ return (n / 10).toFixed(1) + '°C'; };
     if (t.en != 1){
-      list.innerHTML = '<div style="opacity:.65">Thermal control disabled; limits inactive.</div>';
+      list.innerHTML = '<div style="opacity:.65">' + escapeHtml(tr('thermOffList')) + '</div>';
     } else if (e <= s){
       list.innerHTML = '<div style="color:var(--danger,#e5484d)">' +
-        'Release temp must be higher than throttle start temp.</div>';
+        escapeHtml(tr('thermBadOrder')) + '</div>';
     } else {
       var d3 = Math.max(1, Math.floor((e - s) / 3));
       var d4 = Math.max(1, Math.floor((e - s) / 4));
       var tcw = (t.tcWarn !== undefined) ? t.tcWarn : 405;
       var tcr = (t.tcRelease !== undefined) ? t.tcRelease : 430;
       list.innerHTML =
-        '<div>Normal -> below ' + f10(s) + '</div>' +
-        '<div>Warn -> from ' + f10(s) + ' (SOC step down 1 tier)</div>' +
-        '<div>Step A -> ' + f10(s + d3) + '</div>' +
-        '<div>Step B -> ' + f10(s + 2 * d3) + '</div>' +
-        '<div>Release -> >= ' + f10(e) + ' (stop writing node)</div>' +
-        '<div>Recover -> <= ' + f10(Math.max(0, s - 50)) + ' and hold briefly</div>' +
+        '<div>' + escapeHtml(tr('tierNormal', {t: f10(s)})) + '</div>' +
+        '<div>' + escapeHtml(tr('tierWarn', {t: f10(s)})) + '</div>' +
+        '<div>' + escapeHtml(tr('tierStepA', {t: f10(s + d3)})) + '</div>' +
+        '<div>' + escapeHtml(tr('tierStepB', {t: f10(s + 2 * d3)})) + '</div>' +
+        '<div>' + escapeHtml(tr('tierRelease', {t: f10(e)})) + '</div>' +
+        '<div>' + escapeHtml(tr('tierRecover', {t: f10(Math.max(0, s - 50))})) + '</div>' +
         '<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--card-3)">' +
-          '<span style="opacity:.75">Battery temp (fixed): ' +
-          'Warn ' + f10(tcw) + ' / Release ' + f10(tcr) + '</span></div>' +
+          '<span style="opacity:.75">' + escapeHtml(tr('battFixedLine', {w: f10(tcw), r: f10(tcr)})) + '</span></div>' +
         '<div style="opacity:.65;margin-top:4px;font-size:11.5px">' +
-          '4-step linear derate: T1=' + f10(s) +
-          ' T2=' + f10(s + d4) + ' T3=' + f10(s + 2 * d4) +
-          ' T4=' + f10(s + 3 * d4) + ' T5=' + f10(e) + '</div>';
+          escapeHtml(tr('derate4Step', {t1: f10(s), t2: f10(s + d4), t3: f10(s + 2 * d4), t4: f10(s + 3 * d4), t5: f10(e)})) + '</div>';
     }
   }
 }
@@ -3602,8 +4285,8 @@ function renderSafe(d){
   var hint = $('safeHint');
 
   if (!sc){
-    if (hint) hint.innerHTML = '<b>Backend did not return static cap data</b><br>' +
-      'Please verify module scripts and WebUI versions match (or re-flash module).';
+    if (hint) hint.innerHTML = '<b>' + escapeHtml(tr('safeNoBackendTitle')) + '</b><br>' +
+      escapeHtml(tr('safeNoBackendBody'));
     return;
   }
 
@@ -3611,24 +4294,24 @@ function renderSafe(d){
   if (hint){
     var vr = (d && d.voter && d.voter.ready);
     var devTxt = dev.class === 'qcom'
-      ? 'Snapdragon device: module <b>directly controls charging current</b>.'
+      ? tr('safeQcom')
       : dev.class === 'mtk'
-        ? (vr
-            ? 'Dimensity device (V2507A): <b>directly overrides DCHG_FCC limit</b> via vfcs_class.'
-            : 'Dimensity device: module <b>requests current from system</b>.')
-        : 'Unrecognized device class:';
-    hint.innerHTML = devTxt + '<br>' +
-      'Limits the <b>ceiling</b> only; leave at 0 for normal use.';
+        ? (vr ? tr('safeMtkDirect') : tr('safeMtkReq'))
+        : tr('safeUnknownDev');
+    hint.innerHTML = devTxt + '<br>' + tr('safeHintTail');
   }
 
   fillNum('safeCap', 'cap', sc, SAFE_DEFAULTS, STATE.safeDirty);
 
   var stat = $('safeStat');
   if (stat){
-    stat.innerHTML = 'Static cap: ' +
-      ((sc.cap > 0) ? ('<b>' + escapeHtml(sc.cap) + ' mA</b>') : '<b>Off</b>') +
-      ' · Platform: <b>' + escapeHtml(DEV_FRIENDLY[dev.class] || '—') + '</b>' +
-      (dev.model ? ' (' + escapeHtml(dev.model) + ')' : '');
+    var capHtml = (sc.cap > 0) ? ('<b>' + escapeHtml(sc.cap) + ' mA</b>') : ('<b>' + escapeHtml(tr('off')) + '</b>');
+    var modelHtml = dev.model ? (' (' + escapeHtml(dev.model) + ')') : '';
+    stat.innerHTML = tr('safeStatHtml', {
+      cap: capHtml,
+      plat: escapeHtml(DEV_FRIENDLY[dev.class] || '—'),
+      model: modelHtml
+    });
   }
 }
 
@@ -3676,24 +4359,19 @@ function paintSocStop(v, b){
   var curTxt = '';
   if (soc !== null && soc !== '' && !isNaN(parseInt(soc, 10))){
     var s = parseInt(soc, 10);
-    curTxt = ' · Current SOC <b>' + s + '%</b>' +
-      (s >= v
-        ? ' (<span style="color:var(--warn,#d97706)">stop threshold reached, handed back</span>)'
-        : ' (' + (v - s) + '% below stop)');
+    curTxt = tr('socCurTxt', {s: s}) +
+      (s >= v ? tr('socReached') : tr('socBelow', {d: (v - s)}));
   }
 
   var body;
   if (v >= 100){
-    body = '<b>Manage until full</b>: no upper SOC cap; system handles final trickle phase. ' +
-      'Natural CMS derating keeps top-off safe.';
+    body = tr('socFullBody');
   } else if (v >= 95){
-    body = 'Stops near full: hands back after <b>' + v + '%</b>. ' +
-      'System derates high-SOC current natively regardless.';
+    body = tr('socNearFullBody', {v: v});
   } else if (v <= 50){
-    body = '<span style="color:var(--warn,#d97706)">Low threshold</span>: ' +
-      'stops at <b>' + v + '%</b>, only boosting low SOC. Slide up for faster full charge.';
+    body = tr('socLowBody', {v: v});
   } else {
-    body = 'Stops writing above <b>' + v + '%</b>, letting vivo handle its factory CV taper.';
+    body = tr('socMidBody', {v: v});
   }
   hint.innerHTML = body + curTxt;
 }
@@ -3743,7 +4421,7 @@ function onThermBlur(ev){
   var n = parseInt(cleaned, 10);
   if (isNaN(n) || n < 300 || n > 1000){
     this.className = 'danger';
-    noticeOnce('Temp must be 30.0~100.0°C (enter 300~1000)');
+    noticeOnce(tr('thermRangeErr'));
     return;
   }
   this.className = '';
@@ -3788,7 +4466,7 @@ function onSafeBlur(ev){
   if (!(_capHiS > 0)) _capHiS = 15600;
   if (isNaN(n) || n < 0 || n > _capHiS){
     this.className = 'danger';
-    noticeOnce('Static cap must be 0~' + _capHiS + ' mA (0 = unlimited)');
+    noticeOnce(tr('safeRangeErr', {cap: _capHiS}));
     return;
   }
   this.className = '';
@@ -3822,16 +4500,12 @@ function selfProtectWarn(jobs){
     }
   }
   if (en === 0){
-    msgs.push('- Thermal Control [OFF]: both board and battery temp caps are disabled; ' +
-              'current follows SOC table only until kernel 80°C hard cutoff ' +
-              '(abrupt power drop instead of smooth step-down).');
+    msgs.push(tr('warnThermOff'));
   } else {
     if (s !== null && s >= 750)
-      msgs.push('- Throttle start temp ' + (s / 10).toFixed(1) + '°C: ' +
-                'very close to kernel 80°C hard cutoff; throttling kicks in very late.');
+      msgs.push(tr('warnThermStart', {t: (s / 10).toFixed(1)}));
     if (e !== null && e >= 900)
-      msgs.push('- Release temp ' + (e / 10).toFixed(1) + '°C: ' +
-                'effectively bypasses thermal release, relying on kernel hard cutoff.');
+      msgs.push(tr('warnThermStop', {t: (e / 10).toFixed(1)}));
   }
   return msgs;
 }
@@ -3839,9 +4513,9 @@ function selfProtectWarn(jobs){
 function doSaveSafe(){
   var jobs = [];
   if (STATE.safeDirty && STATE.safeDirty.safeCap !== undefined)
-    jobs.push(['safe_cap', STATE.safeDirty.safeCap, 'Static Cap']);
+    jobs.push(['safe_cap', STATE.safeDirty.safeCap, tr('staticCapSec')]);
   if (STATE.thermEnDirty !== null)
-    jobs.push(['therm_en', STATE.thermEnDirty, 'Thermal Switch']);
+    jobs.push(['therm_en', STATE.thermEnDirty, tr('thermEnTitle')]);
   if (STATE.thermDirty){
     for (var k in THERM_SEG){
       if (STATE.thermDirty[k] !== undefined && THERM_SEG.hasOwnProperty(k))
@@ -3849,12 +4523,12 @@ function doSaveSafe(){
     }
   }
   if (STATE.socStopDirty !== null)
-    jobs.push([SOC_STOP_SEG, STATE.socStopDirty, 'Stop Boost SOC']);
+    jobs.push([SOC_STOP_SEG, STATE.socStopDirty, tr('socStopTitle')]);
   if (!jobs.length) return;
 
   var doIt = function(){
-    runJobs(jobs, $('btnSafeSave'), 'Save', function(){
-      toast('Saved ' + jobs.length + ' setting(s)', 'ok');
+    runJobs(jobs, $('btnSafeSave'), tr('btnSave'), function(){
+      toast(tr('savedSettings', {n: jobs.length}), 'ok');
       STATE.safeDirty = null;
       STATE.safeEnDirty = null;
       STATE.thermDirty = null;
@@ -3867,9 +4541,8 @@ function doSaveSafe(){
 
   var w = selfProtectWarn(jobs);
   if (w.length){
-    askConfirm('Confirm weakened thermal protection:\n\n' + w.join('\n') +
-      '\n\nYour choice — please confirm you understand the thermal risk before saving.',
-      doIt, { ok: 'I Understand, Save', cancel: 'Go Back', danger: true });
+    askConfirm(tr('confirmWeakTherm', {w: w.join('\n')}),
+      doIt, { ok: tr('confirmWeakOk'), cancel: tr('confirmWeakCancel'), danger: true });
   } else {
     doIt();
   }
@@ -3877,20 +4550,13 @@ function doSaveSafe(){
 
 // ---- One-tap Restore Stock ----
 function doRestore(){
-  askConfirm('Restore Stock profile?\n\nThis will:\n' +
-    '- Stop daemon and switch to Stock (remains off after reboot)\n' +
-    '- Hand charging current control back to stock scheduler\n' +
-    '- Reset fchg_fcc_ma override to factory idle\n' +
-    '- Clear session and protocol state\n\n' +
-    'Config files and module remain installed.\n' +
-    'Note: re-enabling boost requires picking a profile here again.\n' +
-    'Use "Pause Boost" above for a temporary pause instead.',
+  askConfirm(tr('confirmRestoreMsg'),
     function(){
       var btn = $('btnRestore');
-      btn.disabled = true; btn.textContent = 'Restoring...';
+      btn.disabled = true; btn.textContent = tr('restoring');
       exec("sh " + BIN + " restore", 30000).then(function(r){
         var out = (r.stdout || '').trim();
-        btn.disabled = false; btn.textContent = 'Restore Stock';
+        btn.disabled = false; btn.textContent = tr('btnRestore');
         var timedOut = (r.code !== 0) && /timeout/i.test(out + ' ' + (r.stderr || ''));
         if (r.code === 0 || timedOut){
           STATE.pinActive = 3;
@@ -3901,18 +4567,18 @@ function doRestore(){
             STATE.data.running = false;
             STATE.data.paused = false;
             STATE.data.intervening = false;
-            STATE.data.whyInactive = 'Stock profile: module stopped, charging managed by system.';
+            STATE.data.whyInactive = tr('stockWhyInactive');
           }
-          toast(timedOut ? 'Restored stock (slow reply; local state updated)' : 'Restored to stock', 'ok');
+          toast(timedOut ? tr('restoredSlow') : tr('restoredOk'), 'ok');
           afterSave();
         } else {
-          toast('Restore failed: ' + ((r.stderr || out || '').trim() || ('code ' + r.code)), 'hot');
+          toast(tr('restoreFail', {e: ((r.stderr || out || '').trim() || ('code ' + r.code))}), 'hot');
         }
       }, function(){
-        btn.disabled = false; btn.textContent = 'Restore Stock';
-        toast('Restore failed: module communication error', 'hot');
+        btn.disabled = false; btn.textContent = tr('btnRestore');
+        toast(tr('restoreCommErr'), 'hot');
       });
-    }, { ok: 'Restore', cancel: 'Cancel', danger: true });
+    }, { ok: tr('restoreBtnOk'), cancel: tr('cancel'), danger: true });
 }
 
 // ============================================================
@@ -3937,16 +4603,194 @@ function doRestore(){
 //    · 采样窗口 10 秒，按钮期间禁止重复点击，避免叠加。
 //    · 判读结果分三档：正常 / 需要留意 / 异常，异常时明确提示去找开发者。
 // ============================================================
+function renderHealthSummary(D){
+  var out = $('healthOut');
+  if (!out || !D) return {};
+
+  var verdict = D.verdict || 'ok';
+  var reason  = D.reason ? trBackend(D.reason) : '';
+  var dCpu = parseInt(D.cpu_daemon_x10000, 10);
+  var wCpu = parseInt(D.cpu_watchdog_x10000, 10);
+  var tCpu = parseInt(D.cpu_total_x10000, 10);
+  var win  = parseInt(D.cpu_window_ms, 10) || 0;
+  var beatAge = parseInt(D.heartbeat_age, 10);
+
+  function pct(v){
+    if (isNaN(v) || v < 0 || v > 1000000) return '—';
+    return (v / 10000).toFixed(3) + '%';
+  }
+
+  var color = 'var(--ok,#16a34a)';
+  var icon = '✔';
+  var title = tr('healthOk');
+  if (verdict === 'warn'){
+    color = '#d97706'; icon = '⚠'; title = tr('healthWarn');
+  } else if (verdict === 'fail'){
+    color = 'var(--hot,#dc2626)'; icon = '✕'; title = tr('healthFail');
+  }
+
+  var rows = [];
+  function row(k, v, bad){
+    rows.push('<div style="display:flex;justify-content:space-between;gap:10px;' +
+      'padding:5px 0;border-bottom:1px solid var(--card-3,rgba(127,127,127,.15))">' +
+      '<span style="color:var(--dim);font-size:12px">' + k + '</span>' +
+      '<span style="font-size:12px;font-weight:600;' +
+      (bad ? 'color:var(--hot,#dc2626)' : '') + '">' + v + '</span></div>');
+  }
+
+  var dLife  = parseInt(D.cpu_daemon_life_x10000, 10);
+  var wLife  = parseInt(D.cpu_watchdog_life_x10000, 10);
+  var dChild = parseInt(D.cpu_daemon_child_x10000, 10);
+  var wChild = parseInt(D.cpu_watchdog_child_x10000, 10);
+
+  function pctSelf(v){
+    if (isNaN(v) || v < 0 || v > 1000000) return '—';
+    return (v / 10000).toFixed(3) + '%';
+  }
+  function pctHist(v){
+    if (isNaN(v) || v < 0) return '—';
+    var p = v / 10000;
+    if (p < 0.001) return '≈0%';
+    return p.toFixed(3) + '%';
+  }
+
+  var dLifeOk = (D.cpu_daemon_life_valid === '1');
+  var wLifeOk = (D.cpu_watchdog_life_valid === '1');
+  var selfTotal = ((!isNaN(dLife) && dLife >= 0) ? dLife : 0) +
+                  ((!isNaN(wLife) && wLife >= 0) ? wLife : 0);
+  var selfKnown = (dLifeOk || wLifeOk);
+  var selfBad = selfKnown && selfTotal > 20000;
+  var dRun = parseInt(D.daemon_runsec, 10) || 0;
+  var wRun = parseInt(D.watchdog_runsec, 10) || 0;
+  function runTxt(s){
+    if (!s) return '';
+    if (s < 60) return tr('upSec', {n: s});
+    if (s < 3600) return tr('upMin', {n: Math.floor(s / 60)});
+    return tr('upHr', {n: (s / 3600).toFixed(1)});
+  }
+
+  rows.push('<div style="display:flex;justify-content:space-between;align-items:baseline;' +
+    'gap:10px;padding:8px 0;border-bottom:1px solid var(--card-3,rgba(127,127,127,.15))">' +
+    '<span style="color:var(--dim);font-size:12px">' + escapeHtml(tr('selfCpuTitle')) + '</span>' +
+    '<span style="font-size:17px;font-weight:700;' +
+    (!selfKnown ? 'color:var(--dim)'
+      : (selfBad ? 'color:var(--hot,#dc2626)' : 'color:var(--ok,#16a34a)')) + '">' +
+    (selfKnown ? pctSelf(selfTotal) : '—') + '</span></div>');
+
+  rows.push('<div style="font-size:11px;color:var(--dim);margin:2px 0 8px;line-height:1.5">' +
+    escapeHtml(selfKnown ? tr('selfCpuDesc') : tr('selfCpuEarly')) +
+    '</div>');
+
+  row('  · ' + escapeHtml(tr('daemonLbl')),
+      (dLifeOk ? pctSelf(dLife) : tr('tooEarly')) + runTxt(dRun),
+      (dLifeOk && dLife > 20000));
+  row('  · ' + escapeHtml(tr('watchdogLbl')),
+      (wLifeOk ? pctSelf(wLife) : tr('tooEarly')) + runTxt(wRun),
+      (wLifeOk && wLife > 10000));
+
+  if ((!isNaN(dChild) && dChild > 0) || (!isNaN(wChild) && wChild > 0)){
+    var childTotal = ((!isNaN(dChild) && dChild >= 0) ? dChild : 0) +
+                     ((!isNaN(wChild) && wChild >= 0) ? wChild : 0);
+    row(escapeHtml(tr('diagChildSum')), pctHist(childTotal));
+    rows.push('<div style="font-size:11px;color:var(--dim);margin:2px 0 8px;line-height:1.5">' +
+      tr('diagChildDesc') + '</div>');
+  }
+
+  var dJif = parseInt(D.cpu_daemon_jiffies, 10);
+  var wJif = parseInt(D.cpu_watchdog_jiffies, 10);
+  function act(v){
+    if (isNaN(v) || v < 0) return '—';
+    return v === 0 ? tr('idleWord') : (v + ' tick');
+  }
+  var instantActive = (D.cpu_instant_active === '1');
+  row(escapeHtml(tr('winCpuTitle')), instantActive ? pct(tCpu) : tr('idleInWindow'));
+  row('  · ' + escapeHtml(tr('daemonLbl')), (isNaN(dJif) || dJif < 0) ? '—'
+      : (dJif === 0 ? tr('idleWord') : pct(dCpu)));
+  row('  · ' + escapeHtml(tr('watchdogLbl')), (isNaN(wJif) || wJif < 0) ? '—'
+      : (wJif === 0 ? tr('idleWord') : pct(wCpu)));
+  row('  · ' + escapeHtml(tr('winTicksLbl')), act(dJif) + ' / ' + act(wJif));
+  row(escapeHtml(tr('sampleWinLbl')), win > 0 ? ((win / 1000).toFixed(1) + 's') : '—');
+
+  if (!instantActive && selfKnown){
+    rows.push('<div style="font-size:11px;color:var(--dim);margin:6px 0 2px;line-height:1.5">' +
+      escapeHtml(tr('idleWindowHint')) + '</div>');
+  }
+
+  row(escapeHtml(tr('daemonLbl')),
+      D.daemon_alive === '1' ? tr('runningPid', {pid: (D.daemon_pid || '?')}) : tr('stoppedWord'),
+      D.daemon_alive !== '1');
+  row(escapeHtml(tr('watchdogLbl')),
+      D.watchdog_alive === '1' ? tr('runningPid', {pid: (D.watchdog_pid || '?')}) : tr('stoppedWord'),
+      D.watchdog_alive !== '1');
+  row(escapeHtml(tr('heartbeatLbl')),
+      (isNaN(beatAge) || beatAge < 0) ? tr('noRecord') :
+        (beatAge <= 60 ? (tr('secsAgo', {s: beatAge}) + ' ✔') : tr('secsAgo', {s: beatAge})),
+      (!isNaN(beatAge) && beatAge > 120));
+
+  var online = (D.usb_online === '1');
+  var onlineTxt = (D.usb_online === '1') ? tr('connectedWord')
+                : (D.usb_online === '0') ? tr('unpluggedWord') : '—';
+  row(escapeHtml(tr('chargerLbl')), onlineTxt);
+  row(escapeHtml(tr('battStatusLbl')), (D.bat_status && D.bat_status !== '—' && D.bat_status !== '?')
+      ? escapeHtml(trBackend(D.bat_status)) : '—');
+  var socN = parseInt(D.soc, 10);
+  row(escapeHtml(tr('socLbl')), (isNaN(socN) || socN < 0) ? '—' : (socN + '%'));
+  var gname = tr('profNames')[D.active] || D.active;
+  row(escapeHtml(tr('activeProfLbl')), escapeHtml(gname || '—'));
+
+  var faKey = null;
+  for (var k in D){
+    if (/^vot_.*_fa$/.test(k)){ faKey = k; break; }
+  }
+  if (faKey){
+    var tgt = faKey.slice(4, -3);
+    var fa = D[faKey];
+    var faTxt = (fa === '0' || fa === '1') ? fa : '—';
+    var stuck = (!online && fa === '1');
+    row(escapeHtml(tr('injectChLbl', {tgt: tgt})), 'force_active=' + faTxt, stuck);
+    if (stuck){
+      rows.push('<div style="font-size:11.5px;color:#d97706;margin-top:6px;line-height:1.5">' +
+        escapeHtml(tr('stuckForceHint')) + '</div>');
+    }
+  }
+
+  var logBytes = parseInt(D.log_bytes, 10);
+  row(escapeHtml(tr('logSizeLbl')), (isNaN(logBytes) || logBytes < 0) ? '—'
+      : ((logBytes / 1024).toFixed(0) + ' KB'));
+  row(escapeHtml(tr('versionLbl')), escapeHtml(D.version || '—'));
+
+  var html = '';
+  html += '<div style="border:1px solid ' + color + '33;border-radius:12px;' +
+    'padding:12px;background:' + color + '0d">';
+  html += '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">' +
+    '<span style="font-size:15px;color:' + color + '">' + icon + '</span>' +
+    '<span style="font-size:14px;font-weight:700;color:' + color + '">' + escapeHtml(title) + '</span>' +
+    '</div>';
+  if (reason){
+    html += '<div style="font-size:12px;color:' + color + ';margin-bottom:8px;line-height:1.5">' +
+      escapeHtml(reason) + '</div>';
+  }
+  html += rows.join('');
+  if (verdict !== 'ok'){
+    html += '<div style="font-size:11.5px;color:var(--dim);margin-top:10px;' +
+      'line-height:1.6;padding-top:8px;border-top:1px dashed var(--card-3,rgba(127,127,127,.25))">' +
+      tr('healthHelpHtml') + '</div>';
+  }
+  html += '</div>';
+  out.innerHTML = html;
+  return { verdict: verdict, icon: icon, title: title };
+}
+
 function doHealth(){
   var btn = $('btnHealth');
   var out = $('healthOut');
   if (!btn) return;
 
   btn.disabled = true;
-  btn.textContent = 'Checking... (~12s)';
+  btn.textContent = tr('checking');
   if (out){
     out.innerHTML = '<div style="font-size:12px;color:var(--dim);line-height:1.5">' +
-      'Sampling for 10s to measure live CPU usage of daemon and watchdog...</div>';
+      escapeHtml(tr('samplingMsg')) + '</div>';
   }
 
   var CANDIDATES = [
@@ -3956,7 +4800,7 @@ function doHealth(){
 
   function tryAt(i){
     if (i >= CANDIDATES.length){
-      finish('Module script not found; verify module is installed and enabled.', true);
+      finish(tr('scriptNotFound'), true);
       return;
     }
     var p = CANDIDATES[i];
@@ -3965,247 +4809,41 @@ function doHealth(){
       exec('sh ' + p + ' health', 25000).then(function(r2){
         render(r2);
       }, function(){
-        finish('Module communication timed out (aborted)', true);
+        finish(tr('commTimeout'), true);
       });
     }, function(){ tryAt(i + 1); });
   }
 
   function finish(msg, bad){
     btn.disabled = false;
-    btn.textContent = 'Check CPU / Health';
+    btn.textContent = tr('btnHealth');
     if (out){
       out.innerHTML = '<div style="font-size:13px;color:' +
         (bad ? 'var(--hot,#dc2626)' : 'var(--ok,#16a34a)') +
-        ';line-height:1.6">' + msg + '</div>';
+        ';line-height:1.6">' + escapeHtml(msg) + '</div>';
     }
     toast(msg, bad ? 'hot' : 'ok');
   }
 
   function render(r){
     btn.disabled = false;
-    btn.textContent = 'Check CPU / Health';
+    btn.textContent = tr('btnHealth');
 
     var s = (r.stdout || '').trim();
     if (s.indexOf('HEALTH_BEGIN') < 0){
-      var msg = (r.stderr || s || 'No output').slice(0, 400);
-      finish('Check failed: ' + msg, true);
+      var msg = (r.stderr || s || tr('noOutput')).slice(0, 400);
+      finish(tr('checkFailed', {m: msg}), true);
       return;
     }
 
-    // 解析 KEY=VALUE
     var D = {};
     s.split(/\r?\n/).forEach(function(line){
       var m = line.match(/^([a-z0-9_]+)=(.*)$/i);
       if (m) D[m[1]] = m[2];
     });
-
-    var verdict = D.verdict || 'ok';
-    var reason  = D.reason  || '';
-    var dCpu = parseInt(D.cpu_daemon_x10000, 10);
-    var wCpu = parseInt(D.cpu_watchdog_x10000, 10);
-    var tCpu = parseInt(D.cpu_total_x10000, 10);
-    var win  = parseInt(D.cpu_window_ms, 10) || 0;
-    var beatAge = parseInt(D.heartbeat_age, 10);
-
-    function pct(v){
-      if (isNaN(v) || v < 0 || v > 1000000) return '—';
-      return (v / 10000).toFixed(3) + '%';
-    }
-
-    var color = 'var(--ok,#16a34a)';
-    var icon = '✔';
-    var title = 'All Healthy';
-    if (verdict === 'warn'){
-      color = '#d97706'; icon = '⚠'; title = 'Warning';
-    } else if (verdict === 'fail'){
-      color = 'var(--hot,#dc2626)'; icon = '✕'; title = 'Issue Detected';
-    }
-
-    var rows = [];
-    function row(k, v, bad){
-      rows.push('<div style="display:flex;justify-content:space-between;gap:10px;' +
-        'padding:5px 0;border-bottom:1px solid var(--card-3,rgba(127,127,127,.15))">' +
-        '<span style="color:var(--dim);font-size:12px">' + k + '</span>' +
-        '<span style="font-size:12px;font-weight:600;' +
-        (bad ? 'color:var(--hot,#dc2626)' : '') + '">' + v + '</span></div>');
-    }
-
-    // ---- 占用：全部换算成同一种口径（百分比），无效值一律显示「—」 ----
-    //
-    //   ★ v3578 重做，删掉三类「不合理 / 无效」数据：
-    //
-    //   【1. 单位不统一（最严重）】
-    //     后端三路数据原来是三套单位：瞬时值是百分比×100（且少乘 100，
-    //     真实 2.66% 显示成 0.027%）、生命周期是百分比×1000，字段名却
-    //     都叫 x10000。同屏三个数字量纲不同，怎么算都不讲理，而且
-    //     阈值告警永远不触发。现在后端统一输出百分比×10000，这里 /10000。
-    //
-    //   【2. 假零】
-    //     守护 20 秒才醒一次，10 秒采样窗口可能整段落在睡眠期。
-    //     原来会画出一个 0.000%，看起来像"不耗电"，其实是"没干活"。
-    //     后端现在给 cpu_instant_active，窗口内无增量时显示「本窗口无活动」。
-    //
-    //   【3. 刚启动的虚高平均】
-    //     进程刚起时启动开销摊在极小的分母上，算出来的"平均占用"没有
-    //     参考价值（可能 5%~20%）。后端给 *_life_valid，无效时显示
-    //     「样本不足」，绝不画数字。
-    var dLife  = parseInt(D.cpu_daemon_life_x10000, 10);
-    var wLife  = parseInt(D.cpu_watchdog_life_x10000, 10);
-    var dChild = parseInt(D.cpu_daemon_child_x10000, 10);
-    var wChild = parseInt(D.cpu_watchdog_child_x10000, 10);
-
-    // 统一口径：后端输出百分比 × 10000
-    function pctSelf(v){
-      if (isNaN(v) || v < 0 || v > 1000000) return '—';
-      return (v / 10000).toFixed(3) + '%';
-    }
-    // 子进程累计（历史流水，只增不减，仅作诊断）
-    function pctHist(v){
-      if (isNaN(v) || v < 0) return '—';
-      var p = v / 10000;
-      if (p < 0.001) return '≈0%';
-      return p.toFixed(3) + '%';
-    }
-
-    var dLifeOk = (D.cpu_daemon_life_valid === '1');
-    var wLifeOk = (D.cpu_watchdog_life_valid === '1');
-    var selfTotal = ((!isNaN(dLife) && dLife >= 0) ? dLife : 0) +
-                    ((!isNaN(wLife) && wLife >= 0) ? wLife : 0);
-    var selfKnown = (dLifeOk || wLifeOk);
-    var selfBad = selfKnown && selfTotal > 20000;   // >2.00%，与后端 warn 同阈值
-    var dRun = parseInt(D.daemon_runsec, 10) || 0;
-    var wRun = parseInt(D.watchdog_runsec, 10) || 0;
-    function runTxt(s){
-      if (!s) return '';
-      if (s < 60) return ' · up ' + s + 's';
-      if (s < 3600) return ' · up ' + Math.floor(s / 60) + 'm';
-      return ' · up ' + (s / 3600).toFixed(1) + 'h';
-    }
-
-    // Main metric: module self CPU usage
-    rows.push('<div style="display:flex;justify-content:space-between;align-items:baseline;' +
-      'gap:10px;padding:8px 0;border-bottom:1px solid var(--card-3,rgba(127,127,127,.15))">' +
-      '<span style="color:var(--dim);font-size:12px">Module Self CPU</span>' +
-      '<span style="font-size:17px;font-weight:700;' +
-      (!selfKnown ? 'color:var(--dim)'
-        : (selfBad ? 'color:var(--hot,#dc2626)' : 'color:var(--ok,#16a34a)')) + '">' +
-      (selfKnown ? pctSelf(selfTotal) : '—') + '</span></div>');
-
-    rows.push('<div style="font-size:11px;color:var(--dim);margin:2px 0 8px;line-height:1.5">' +
-      (selfKnown
-        ? 'Self CPU = actual process CPU (cumulative / uptime); does not grow over time.'
-        : 'Daemon uptime < 2m; average CPU sample insufficient (hidden).') +
-      '</div>');
-
-    row('  · Daemon',
-        (dLifeOk ? pctSelf(dLife) : 'Too early') + runTxt(dRun),
-        (dLifeOk && dLife > 20000));
-    row('  · Watchdog',
-        (wLifeOk ? pctSelf(wLife) : 'Too early') + runTxt(wRun),
-        (wLifeOk && wLife > 10000));
-
-    // Historical child CPU (diagnostics only)
-    if ((!isNaN(dChild) && dChild > 0) || (!isNaN(wChild) && wChild > 0)){
-      var childTotal = ((!isNaN(dChild) && dChild >= 0) ? dChild : 0) +
-                       ((!isNaN(wChild) && wChild >= 0) ? wChild : 0);
-      row('Diag · Child CPU Sum', pctHist(childTotal));
-      rows.push('<div style="font-size:11px;color:var(--dim);margin:2px 0 8px;line-height:1.5">' +
-        '<b>Cumulative</b> CPU of forked subshells (sleep/cat/awk) since start; ' +
-        'represents total historical work, <b>not current load</b>.' +
-        '</div>');
-    }
-
-    // Instantaneous window activity
-    var dJif = parseInt(D.cpu_daemon_jiffies, 10);
-    var wJif = parseInt(D.cpu_watchdog_jiffies, 10);
-    function act(v){
-      if (isNaN(v) || v < 0) return '—';
-      return v === 0 ? 'Idle' : (v + ' tick');
-    }
-    var instantActive = (D.cpu_instant_active === '1');
-    row('Window CPU Usage', instantActive ? pct(tCpu) : 'Idle in window');
-    row('  · Daemon', (isNaN(dJif) || dJif < 0) ? '—'
-        : (dJif === 0 ? 'Idle' : pct(dCpu)));
-    row('  · Watchdog', (isNaN(wJif) || wJif < 0) ? '—'
-        : (wJif === 0 ? 'Idle' : pct(wCpu)));
-    row('  · Window ticks', act(dJif) + ' / ' + act(wJif));
-    row('Sample Window', win > 0 ? ((win / 1000).toFixed(1) + 's') : '—');
-
-    if (!instantActive && selfKnown){
-      rows.push('<div style="font-size:11px;color:var(--dim);margin:6px 0 2px;line-height:1.5">' +
-        '"Idle in window" is normal: when unplugged, daemon wakes only every 20s. ' +
-        'Refer to "Module Self CPU" above.</div>');
-    }
-
-    // Processes
-    row('Daemon',
-        D.daemon_alive === '1' ? ('Running · PID ' + (D.daemon_pid || '?')) : 'Stopped',
-        D.daemon_alive !== '1');
-    row('Watchdog',
-        D.watchdog_alive === '1' ? ('Running · PID ' + (D.watchdog_pid || '?')) : 'Stopped',
-        D.watchdog_alive !== '1');
-    row('Heartbeat',
-        (isNaN(beatAge) || beatAge < 0) ? 'No record' :
-          (beatAge <= 60 ? (beatAge + 's ago ✔') : (beatAge + 's ago')),
-        (!isNaN(beatAge) && beatAge > 120));
-
-    // Live state
-    var online = (D.usb_online === '1');
-    var onlineTxt = (D.usb_online === '1') ? 'Connected'
-                  : (D.usb_online === '0') ? 'Unplugged' : '—';
-    row('Charger', onlineTxt);
-    row('Battery Status', (D.bat_status && D.bat_status !== '—' && D.bat_status !== '?')
-        ? D.bat_status : '—');
-    var socN = parseInt(D.soc, 10);
-    row('SOC', (isNaN(socN) || socN < 0) ? '—' : (socN + '%'));
-    var gname = {'1':'Aggressive','2':'Balanced','3':'Stock'}[D.active] || D.active;
-    row('Active Profile', gname || '—');
-
-    // Voter / direct channel
-    var faKey = null;
-    for (var k in D){
-      if (/^vot_.*_fa$/.test(k)){ faKey = k; break; }
-    }
-    if (faKey){
-      var tgt = faKey.slice(4, -3);
-      var fa = D[faKey];
-      var faTxt = (fa === '0' || fa === '1') ? fa : '—';
-      var stuck = (!online && fa === '1');
-      row('Inject Ch ' + tgt, 'force_active=' + faTxt, stuck);
-      if (stuck){
-        rows.push('<div style="font-size:11.5px;color:#d97706;margin-top:6px;line-height:1.5">' +
-          '⚠ Unplugged yet force_active=1 (possible leftover override from last charge).</div>');
-      }
-    }
-
-    var logBytes = parseInt(D.log_bytes, 10);
-    row('Log Size', (isNaN(logBytes) || logBytes < 0) ? '—'
-        : ((logBytes / 1024).toFixed(0) + ' KB'));
-    row('Version', D.version || '—');
-
-    var html = '';
-    html += '<div style="border:1px solid ' + color + '33;border-radius:12px;' +
-      'padding:12px;background:' + color + '0d">';
-    html += '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">' +
-      '<span style="font-size:15px;color:' + color + '">' + icon + '</span>' +
-      '<span style="font-size:14px;font-weight:700;color:' + color + '">' + title + '</span>' +
-      '</div>';
-    if (reason){
-      html += '<div style="font-size:12px;color:' + color + ';margin-bottom:8px;line-height:1.5">' +
-        reason + '</div>';
-    }
-    html += rows.join('');
-    if (verdict !== 'ok'){
-      html += '<div style="font-size:11.5px;color:var(--dim);margin-top:10px;' +
-        'line-height:1.6;padding-top:8px;border-top:1px dashed var(--card-3,rgba(127,127,127,.25))">' +
-        'Screenshot this summary to help diagnose the issue.<br>' +
-        'For full logs, tap "Export Debug Bundle".</div>';
-    }
-    html += '</div>';
-
-    out.innerHTML = html;
-    toast(icon + ' ' + title, verdict === 'ok' ? 'ok' : (verdict === 'fail' ? 'hot' : 'warn'));
     HEALTH_LAST = D;
+    var res = renderHealthSummary(D);
+    toast(res.icon + ' ' + res.title, res.verdict === 'ok' ? 'ok' : (res.verdict === 'fail' ? 'hot' : 'warn'));
   }
 
   tryAt(0);
@@ -4219,9 +4857,8 @@ function doLogDump(){
   if (!btn) return;
 
   btn.disabled = true;
-  btn.textContent = 'Collecting & archiving...';
-  if (out) out.textContent = 'Collecting debug snapshot (~5-15s)...\n' +
-    'Includes: module state / charging / DT / voter / sysfs / dmesg / props / procs';
+  btn.textContent = tr('dumpBusy');
+  if (out) out.textContent = tr('dumpWaitMsg');
 
   var DUMP_CANDIDATES = [
     '/data/adb/modules/v2507a_charge_boost/logdump.sh',
@@ -4232,10 +4869,9 @@ function doLogDump(){
   function tryAt(i){
     if (i >= DUMP_CANDIDATES.length){
       btn.disabled = false;
-      btn.textContent = 'Export Debug Bundle';
-      if (out) out.textContent = 'Failed: logdump.sh not found\n' +
-        'Expected at:\n  ' + DUMP_CANDIDATES.join('\n  ');
-      toast('logdump.sh not found', 'hot');
+      btn.textContent = tr('btnLogDump');
+      if (out) out.textContent = tr('dumpMissing', {p: DUMP_CANDIDATES.join('\n  ')});
+      toast(tr('dumpMissingToast'), 'hot');
       return;
     }
     var path = DUMP_CANDIDATES[i];
@@ -4254,7 +4890,7 @@ function doLogDump(){
   function runDump(path){
     exec("sh " + path, 120000).then(function(r){
       btn.disabled = false;
-      btn.textContent = 'Export Debug Bundle';
+      btn.textContent = tr('btnLogDump');
 
       var stdout = (r.stdout || '');
       var stderr = (r.stderr || '');
@@ -4268,34 +4904,34 @@ function doLogDump(){
           out.innerHTML = '';
           var d1 = document.createElement('div');
           d1.style.color = 'var(--ok,#16a34a)';
-          d1.textContent = '✔ Generated (read-only; no settings changed)';
+          d1.textContent = tr('dumpDone');
           out.appendChild(d1);
 
           var d2 = document.createElement('div');
           d2.style.marginTop = '6px';
-          d2.textContent = 'File: ' + dumpPath;
+          d2.textContent = tr('dumpFile', {p: dumpPath});
           out.appendChild(d2);
 
           var d3 = document.createElement('div');
           d3.style.marginTop = '6px';
           d3.style.color = 'var(--dim)';
-          d3.textContent = 'Check /sdcard/Download in your file manager to share the archive.';
+          d3.textContent = tr('dumpShareHint');
           out.appendChild(d3);
         }
-        toast('Debug bundle created', 'ok');
+        toast(tr('dumpCreatedToast'), 'ok');
       } else {
         var msg = (stderr || stdout || '').trim();
         if (msg.length > 600) msg = '...' + msg.slice(-600);
         if (out){
-          out.textContent = 'Failed (code ' + r.code + ')\n' + msg;
+          out.textContent = tr('dumpFailOut', {code: r.code, msg: msg});
         }
-        toast('Export failed; see details below', 'hot');
+        toast(tr('dumpFailToast'), 'hot');
       }
     }, function(){
       btn.disabled = false;
-      btn.textContent = 'Export Debug Bundle';
-      if (out) out.textContent = 'Failed: module communication error (timeout or denied)';
-      toast('Export failed: comm error', 'hot');
+      btn.textContent = tr('btnLogDump');
+      if (out) out.textContent = tr('dumpCommErr');
+      toast(tr('dumpCommToast'), 'hot');
     });
   }
 
@@ -4416,33 +5052,18 @@ function fetchData(onStale){
         var _out = (r2.stdout || '').trim();
 
         if (/timeout/i.test(_err) || /timeout/i.test(_out)){
-          throw new Error(
-            'Read timed out (waited > 15s)\n\n' +
-            'Common causes:\n' +
-            '- Very low temp/SOC slows sensor reads -> plug in charger and retry\n' +
-            '- System just booted and background I/O is busy -> wait 1m\n' +
-            '- First-run DT cache building -> wait ~5-10s\n\n' +
-            'Run in terminal to inspect timing:\n' +
-            'time sh ' + BIN + ' getjson');
+          throw new Error(tr('errTimeout', {bin: BIN}));
         }
 
         if (_err){
-          throw new Error('Module script error: ' + _err +
-            '\n\nCheck module file integrity/permissions or re-flash.');
+          throw new Error(tr('errScript', {err: _err}));
         }
 
         if (!_out){
-          throw new Error(
-            'No output from module\n\n' +
-            'Possible causes:\n' +
-            '- Module not installed, disabled, or uninstalled\n' +
-            '- Reboot required after flashing in KernelSU\n\n' +
-            'Ensure module is enabled -> reboot -> reopen WebUI.');
+          throw new Error(tr('errNoOut'));
         }
 
-        throw new Error('Invalid JSON response (' + _out.length + ' bytes)\n\n' +
-          'First 80 chars: ' + _out.slice(0, 80) +
-          '\n\nVersion mismatch between module script and WebUI.');
+        throw new Error(tr('errBadJson', {len: _out.length, head: _out.slice(0, 80)}));
       }
       j2._src = 'live';
       return j2;
@@ -4457,54 +5078,50 @@ function renderPause(d){
   var paused = !!(d && d.paused);
   var html;
   if (paused){
-    html = '<b style="color:var(--warn,#d97706)">Status: Temporarily Paused</b><br>' +
-      'Overrides cleared; charging handled by system.';
+    html = tr('pauseCurOn');
   } else {
-    html = '<b style="color:var(--ok,#30a46c)">Status: Boost Active</b>';
+    html = tr('pauseCurActive');
     if (d && d.running === false){
-      html += '<br>(Daemon not running; tap "Resume Boost" to restart)';
+      html += tr('pauseDaemonOff');
     }
   }
   if (el.innerHTML !== html) el.innerHTML = html;
 }
 
 function doPause(){
-  askConfirm('Temporarily pause boost?\n\n' +
-    '- Clears all overrides while keeping config across reboots\n' +
-    '- Tap "Resume Boost" later to re-enable\n\n' +
-    'Ideal for slow or car chargers.',
+  askConfirm(tr('askPauseMsg'),
     function(){
       var btn = $('btnPause');
-      btn.disabled = true; btn.textContent = 'Pausing...';
+      btn.disabled = true; btn.textContent = tr('pausing');
       exec("sh " + BIN + " pause", 20000).then(function(r){
-        btn.disabled = false; btn.textContent = 'Pause Boost';
+        btn.disabled = false; btn.textContent = tr('btnPause');
         if (r.code === 0){
-          toast('Boost paused', 'ok');
+          toast(tr('pausedToast'), 'ok');
           afterSave();
         } else {
-          toast('Pause failed: ' + ((r.stderr || r.stdout || '').trim() || ('code ' + r.code)), 'hot');
+          toast(tr('pauseFail', {e: ((r.stderr || r.stdout || '').trim() || ('code ' + r.code))}), 'hot');
         }
       }, function(){
-        btn.disabled = false; btn.textContent = 'Pause Boost';
-        toast('Pause failed: module communication error', 'hot');
+        btn.disabled = false; btn.textContent = tr('btnPause');
+        toast(tr('pauseCommErr'), 'hot');
       });
-    }, { ok: 'Pause', cancel: 'Cancel' });
+    }, { ok: tr('pauseBtnOk'), cancel: tr('cancel') });
 }
 
 function doResume(){
   var btn = $('btnResume');
-  btn.disabled = true; btn.textContent = 'Resuming...';
+  btn.disabled = true; btn.textContent = tr('resuming');
   exec("sh " + BIN + " resume", 20000).then(function(r){
-    btn.disabled = false; btn.textContent = 'Resume Boost';
+    btn.disabled = false; btn.textContent = tr('btnResume');
     if (r.code === 0){
-      toast('Boost resumed', 'ok');
+      toast(tr('resumedToast'), 'ok');
       afterSave();
     } else {
-      toast('Resume failed: ' + ((r.stderr || r.stdout || '').trim() || ('code ' + r.code)), 'hot');
+      toast(tr('resumeFail', {e: ((r.stderr || r.stdout || '').trim() || ('code ' + r.code))}), 'hot');
     }
   }, function(){
-    btn.disabled = false; btn.textContent = 'Resume Boost';
-    toast('Resume failed: module communication error', 'hot');
+    btn.disabled = false; btn.textContent = tr('btnResume');
+    toast(tr('resumeCommErr'), 'hot');
   });
 }
 
@@ -4616,21 +5233,18 @@ function renderSegHint(d){
 
   var finalVal = Math.min(segVal, effGate);
 
-  var who = (segVal <= effGate) ? 'segment value' : 'limit x derate';
+  var who = (segVal <= effGate) ? tr('segWhoSelf') : tr('segWhoLimit');
 
   var html = '';
   if (seg){
-    html += 'At <b>' + soc + '%</b> (<b>' + escapeHtml(segLabel(b, seg)) +
-      '</b>), segment requests <b>' + segVal + ' mA</b>.<br>';
+    html += tr('segHintInRange', {soc: soc, lbl: escapeHtml(segLabel(b, seg)), val: segVal});
   } else if (!isNaN(soc)){
-    html += 'At <b>' + soc + '%</b>, SOC is outside active range (idle).<br>';
+    html += tr('segHintOutRange', {soc: soc});
   }
-  html += 'Effective inject ~ <b>' + finalVal + ' mA</b>' +
-    ' (capped by ' + who + ')';
+  html += tr('segHintEff', {v: finalVal, who: who});
 
   if (d.thermState > 0 && d.thermState !== null && d.thermState !== undefined){
-    html += '<br><span style="color:var(--warn,#d97706)">Thermal derating active; ' +
-      'limit throttled to ' + effGate + ' mA</span>';
+    html += tr('segHintTherm', {g: effGate});
   }
 
   if (el.innerHTML !== html) el.innerHTML = html;
@@ -4648,7 +5262,7 @@ function applyData(d){
       running: false,
       paused: false,
       intervening: false,
-      whyInactive: 'Stock profile: module stopped, charging managed by system.'
+      whyInactive: tr('stockWhyInactive')
     });
   }
 
@@ -4697,9 +5311,9 @@ function tick(){
       //   只保留一个可复制的命令，方便反馈问题时贴出来。
       var msg = (e && e.message) ? e.message : String(e);
       if (/getjson/.test(msg) === false){
-        msg += '\n\nRun this to inspect:\nsh ' + BIN + ' getjson';
+        msg += tr('inspectCmdHint', {bin: BIN});
       }
-      showErr('Failed to read status:\n' + msg);
+      showErr(tr('readFailErr', {msg: msg}));
     }
     var dot = $('dotSvc');
     if (dot) dot.className = 'dot2 off';
@@ -4754,26 +5368,21 @@ function switchProfile(a){
     //   不是"原厂实际会申请的电流"。写额度 = 把申请顶格，
     //   这不是"交还系统"，反而比原厂更激进。
     //   真正的原厂 = 模块干预【之前】驱动自己设的那个值。
-    askConfirm('Switch to Stock profile? This stops boosting and returns control to the system.\n\n' +
-      'The module will restore charging current in order:\n' +
-      '1. Restore original backed-up node value (factory state)\n' +
-      '2. Fallback to DT table request limit if backup missing\n' +
-      '3. Fallback to safe default value\n\n' +
-      'The daemon will exit and stop writing. Continue?',
+    askConfirm(tr('askStockMsg'),
       function(){ doSwitchProfile(3); },
-      { ok: 'Switch', cancel: 'Cancel', danger: true });
+      { ok: tr('switchBtn'), cancel: tr('cancel'), danger: true });
     return;
   }
   doSwitchProfile(a);
 }
 
 function doSwitchProfile(a){
-  var NAMES = {1:'Aggressive', 2:'Balanced', 3:'Stock'};
+  var NAMES = tr('profNames');
 
   STATE.pinActive = null;
 
   setActiveTab(a);
-  toast('Switching...');
+  toast(tr('switching'));
 
   exec("sh " + BIN + " profile write " + a, 20000).then(function(r){
     var out = (r.stdout || '').trim();
@@ -4783,11 +5392,10 @@ function doSwitchProfile(a){
     var timedOut = (r.code !== 0) && /timeout/i.test(out + ' ' + (r.stderr || ''));
 
     if (okFlag || timedOut){
-      toast(timedOut ? ('Switched to ' + NAMES[a] + ' (slow reply; local state updated)')
-                     : ('Switched to ' + NAMES[a]), 'ok');
+      toast(timedOut ? tr('switchedSlow', {name: NAMES[a]}) : tr('switchedOk', {name: NAMES[a]}), 'ok');
     } else {
       if (STATE.data) setActiveTab(STATE.data.active);
-      toast('Switch failed: ' + (r.stderr || out || ('code ' + r.code)), 'err');
+      toast(tr('switchFail', {e: (r.stderr || out || ('code ' + r.code))}), 'err');
       return;
     }
 
@@ -4800,7 +5408,7 @@ function doSwitchProfile(a){
         STATE.data.running = false;
         STATE.data.paused = false;
         STATE.data.intervening = false;
-        STATE.data.whyInactive = 'Stock profile: module stopped, charging managed by system.';
+        STATE.data.whyInactive = tr('stockWhyInactive');
       }
       STATE.forceLive = true;
       STATE.lastCal = null;
@@ -4815,7 +5423,7 @@ function doSwitchProfile(a){
     setTimeout(function(){ STATE.lastCal = null; tick(); }, 2500);
   }).catch(function(e){
     if (STATE.data) setActiveTab(STATE.data.active);
-    toast('Switch failed: ' + (e && e.message ? e.message : e), 'err');
+    toast(tr('switchFail', {e: (e && e.message ? e.message : e)}), 'err');
   });
 }
 
@@ -4833,8 +5441,8 @@ function doSaveCal(keys){
   for (var n = 0; n < keys.length; n++){
     jobs.push([keys[n], STATE.dirty[keys[n]], keys[n]]);
   }
-  runJobs(jobs, $('btnSave'), 'Save Segments', function(){
-    toast('Saved ' + keys.length + ' change(s)', 'ok');
+  runJobs(jobs, $('btnSave'), tr('btnSaveSegs'), function(){
+    toast(tr('savedChanges', {n: keys.length}), 'ok');
     STATE.dirty = null;
     STATE.editing = false;
     STATE.lastCal = null;
@@ -5059,13 +5667,9 @@ function bind(){
       $('btnVotSave').disabled = false;
       // 开启 voter 是有风险的动作，必须二次确认
       if (val === 1){
-        askConfirm('Enable hardware direct control?\n\n' +
-          'The module will bypass system request scheduling and directly force DCHG_FCC current.\n\n' +
-          '- No system secondary verification safeguard\n' +
-          '- Recommended to test with a lower Total Current Limit first\n\n' +
-          'Enable now?',
+        askConfirm(tr('askDirectMsg'),
           function(){ doSaveVoter(); },
-          { ok: 'Enable', cancel: 'Cancel', danger: true });
+          { ok: tr('enableWord'), cancel: tr('cancel'), danger: true });
       }
     });
   }
@@ -5088,8 +5692,8 @@ function bind(){
         var _tbs2 = document.getElementById('btnSafeSave'); if (_tbs2) _tbs2.disabled = false;
       };
       if (val === 0){
-        askConfirm('Disable thermal control?\n\nAll temperature limits will be ignored and charging may hit kernel 80°C hard cutoff.\n\nDisable anyway?',
-          apply, { ok: 'Disable', cancel: 'Cancel', danger: true });
+        askConfirm(tr('askThermOffMsg'),
+          apply, { ok: tr('disableWord'), cancel: tr('cancel'), danger: true });
       } else {
         apply();
       }
@@ -5118,6 +5722,13 @@ function bind(){
     });
   }
 
+  var langBtns = document.querySelectorAll('#langSw .lang-btn');
+  for (i = 0; i < langBtns.length; i++){
+    langBtns[i].addEventListener('click', function(){
+      setLang(this.getAttribute('data-lang'));
+    });
+  }
+
   $('btnRestore').addEventListener('click', doRestore);
   $('btnLogDump').addEventListener('click', doLogDump);
   $('btnHealth').addEventListener('click', doHealth);
@@ -5127,13 +5738,13 @@ function bind(){
 
 function boot(){
   BRIDGE = detectBridge();
+  applyI18n();
   if (BRIDGE !== 'ksu'){
-    showErr('Not running inside KernelSU Manager (preview mode; settings cannot be saved).\n' +
-            'Open this page from the Modules tab in KernelSU Manager.');
+    showErr(tr('notKsuErr'));
   }
   bind();
   initMiui();                // ★ v3.2.9：底部导航 + 大标题收缩
-  buildPlaceholderTable();   // 先铺占位，避免空白
+  if (!STATE.data) buildPlaceholderTable();   // 先铺占位，避免空白
   // ★ 首屏零等待：本地若有上次的快照就立刻画出来（同步读、0 延迟），
   //   用户一打开就看到内容；紧接着的 tick() 会用真实数据覆盖它。
   paintBootSnap();
