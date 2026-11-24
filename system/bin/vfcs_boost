@@ -1,37 +1,38 @@
 #!/system/bin/sh
 #
-# vivo / iQOO 充电加速（跨平台：天玑 + 骁龙）
+# vivo / iQOO 充电加速（V2507A 原生适配 + 跨平台：天玑 vfcs_class / 骁龙 votable）
 # 纯 userspace 实现，不修改任何分区 / 内核 / DT。
 #
-#  机型分流：
+#  通道分流：
 #    · 骁龙（iQOO13 V2408A / Neo10Pro+ V2463A）
 #        主逻辑 = PMIC voter 判决层注入（force_active + force_val）
 #        不使用 sysfs 申请层（fchg_fcc_ma），避免协议重协商掉档。
-#    · 天玑（X200 Pro V2405A）
-#        主逻辑 = sysfs 申请层（fchg_fcc_ma，本机无 voter 通道）
-#        叠加防降流安全封顶。
+#    · 天玑（iQOO Z10 Turbo+ V2507A / MT6991）
+#        主逻辑 = vfcs_class/fchg_fcc_ma 原生直控通道
+#        （内核实测直接调用 force_active_votable(DCHG_FCC, "VFCS_CLASS_EVENT", ...)），
+#        支持总闸 × 温度降额 + 分段曲线，写 0 即撤回交回系统。
 #
 #  用法：
 #    vfcs_boost {start|stop|status|once|table|power|profile|factory
 #                getjson|setcal|cells|probe|restore}
 #
 NODE="/sys/class/vfcs_class/fchg_fcc_ma"
-LOG="/data/adb/v2352a_charge_boost.log"
-PIDFILE="/data/adb/v2352a_charge_boost.pid"
-PROFILE_FILE="/data/adb/v2352a_charge_boost.profile"
+LOG="/data/adb/v2507a_charge_boost.log"
+PIDFILE="/data/adb/v2507a_charge_boost.pid"
+PROFILE_FILE="/data/adb/v2507a_charge_boost.profile"
 
-VOT_ORIG="/data/adb/v2352a_charge_boost.vot_orig"
+VOT_ORIG="/data/adb/v2507a_charge_boost.vot_orig"
 
-LOCKDIR="/data/adb/v2352a_charge_boost.lock"
+LOCKDIR="/data/adb/v2507a_charge_boost.lock"
 
-CACHE_FILE="/data/adb/v2352a_charge_boost.status.json"
+CACHE_FILE="/data/adb/v2507a_charge_boost.status.json"
 CACHE_TMP="$CACHE_FILE.tmp"
 
 # 「临时解除加速」标记（照 120w 模块的 paused 机制）。
 #   存在 = 临时停手：守护把干预全部撤掉后空转（不退出、不写任何节点），
 #   拔掉标记即立刻恢复。跨重启有效 —— service.sh / 看门狗都会尊重它。
 #   与"恢复原厂"的区别：恢复原厂写 ACTIVE=3，是彻底停手且不再自动回来。
-PAUSE_FLAG="/data/adb/v2352a_charge_boost.paused"
+PAUSE_FLAG="/data/adb/v2507a_charge_boost.paused"
 
 # ---------------- 参数 ----------------
 TEMP_MIN=150
@@ -45,17 +46,10 @@ SOC_MIN=5
 #    · 存进 profile 的 SOC_STOP，守护热重载后立即生效
 #    · 100 = 一直管到满（不设上限），交给系统按自己的策略收尾
 #
-#  【为什么本机语义是「不再写节点」而不是「降流」】
-#    本机在 SOC 高档由 vivo cms 自己做降额（USER_FCC_EVENT），
-#    模块在这个区间继续钉 14100 反而会和系统打架。
-#    所以超过 SOC_STOP 时模块只是【撒手不写】，把控制权交回系统 ——
-#    这不是限速，是让系统按它自己的曲线收尾。
-#    实测：SOC 94% 时模块收手，充电仍继续（由系统按 9034mA 自然降额）。
-#
-#  【上下限为什么是 40~100】
-#    · 低于 40 意味着刚过半就撒手，等于模块基本没用（但仍允许，用户自由）
-#    · 100 表示一直管到满；满电后系统自己会转涓流，模块的申请值届时
-#      也会被 cms 的 USER_FCC_EVENT 压住，不会硬冲
+#  【为什么超过 SOC_STOP 时是「归零交回」】
+#    V2507A 在 SOC 高档由 vivo vfcs-cms 自己做降额（USER_FCC_EVENT），
+#    模块在这个区间继续强写 15600 反而会盖住末端收尾策略。
+#    所以超过 SOC_STOP 时模块撤回 VFCS_CLASS_EVENT（写 0），把控制权交回系统。
 # ============================================================
 SOC_MAX=90
 # ★ v3541：出厂默认停止线（只读常量，用于判断用户有没有改过）。
@@ -67,11 +61,11 @@ SOC_STOP_MIN=40
 SOC_STOP_MAX=100
 # ★ v3525：SOC 分段回归原版五段平铺（70/80/86/89 是旧的分段边界）
 
-TB_WARN=650
-TB_CAP_A=700
-TB_CAP_B=750
-TB_RELEASE=790
-TB_RECOVER=600
+TB_WARN=460
+TB_CAP_A=486
+TB_CAP_B=513
+TB_RELEASE=540
+TB_RECOVER=410
 
 TC_WARN=405
 TC_CAP_A=410
@@ -91,7 +85,7 @@ TC_RECOVER_F=390
 TEMP_RECOVER_SEC=20
 
 CAP_A=9720
-CAP_B=5765
+CAP_B=6056
 
 TEMP_WARN=$TB_WARN
 TEMP_CAP_A=$TB_CAP_A
@@ -125,21 +119,13 @@ SOC_T4=89
 #   【I_FALLBACK 只是初值占位】真正的默认值由 apply_defaults 用 cal_max() 填，
 #     这里给 14100 是为了在"profile 文件存在且用户设过值"时不误伤。
 #   用户仍可在 WebUI 段位表里改低（省电 / 控温）。
-I_FALLBACK=14100
-#   ★ v3530：分段值统一改为本机 DT 标定 14100（与总闸一致）
-#
-#   【为什么】注入时是 _vot_ib = min(cur_set, vot_calc())，
-#   即 min(分段值, 总闸×温度降额)。两者必须同源，否则永远一方压另一方。
-#   本机 calDt = 14100，于是分段也设 14100：
-#     实际注入 = min(14100, 14100×降额) = 14100×降额 ✔
-#
-#   【仍然保留分段机制】用户若把某一段设低（如 8000），min() 会取更低值，
-#   用于"低电量段也想慢充"的场景。
-I_LOW=14100
-I_MID=14100
-I_PEAK=14100
-I_MID2=14100
-I_LOW2=14100
+I_FALLBACK=15600
+#   ★ V2507A 原生适配：分段值统一为本机 DT 标定 15600（与总闸一致）
+I_LOW=15600
+I_MID=15600
+I_PEAK=15600
+I_MID2=15600
+I_LOW2=15600
 
 # ★ v3525 对齐原版（x200pro_charge_boost_v3.5.11）的注入模型：
 #   原版五段全平 11500，但【总闸 IBAT_DEFAULT=9000】才是真正的注入基准，
@@ -207,13 +193,9 @@ LADDER_MIGRATE=1
 #   温度降额照常生效：高温时按整档下跳（14100 -> 11720 -> 9720 / 5765），
 #   不是百分比曲线（历史注释的 100/97/91/81/72/63% 从未实现，已作废）。
 #   想收窄：改小这个值即可（WebUI 里也能改）。
-#   ★ v3530：改回本机 DT 标定 14100。
-#     【依据】本机 /sys/class/cms_class/vfloat_voltage = 4450mV，
-#     calDt = 14100，且 DCHG_FCC 的硬件默认额度就是
-#     FCHG_DEFAULT_EVENT v=14100 —— 14100 是【本机自己声明的额度】，
-#     不是外来常量。9000 是其他机型（X200 Pro）设定的值，对本机只用到 64%。
-#     理论换算：14100 × 4.45V = 62.7W 电池侧。
-IBAT_DEFAULT=14100
+#   ★ V2507A 原生适配：总闸默认值 15600（本机 vfcs/vivo,fchg-curr-max-ma = 15600）。
+#     理论换算：15600 × 4.50V ≈ 70.2W 电池侧天花板。
+IBAT_DEFAULT=15600
 #   ★ 上一版（v3.5.7）用过的总闸默认值。仅用于识别"那一版自动抬上去的
 #   值"，不参与任何注入计算。
 IBAT_PREV_DEFAULT=11500
@@ -259,62 +241,17 @@ SAFE_HIGH=5800
 SAFE_DROP_STEP=400
 SAFE_LOCK_SEC=30
 
-# 实测有效的电流台阶列表（WebUI "可用档位参考"）。
-#   ★ v3515：15600 从"默认推荐"降级为"超频档"—— 它属于跨机型通用常量，
-#   本机 DT 标定是 14100。列表里保留它，是因为超频档下它确实可写；
-#   但 WebUI 会把它标成"超频"而非默认值。
-# ★ v3539：去掉 15600。
-#   15600 是其他机型（X200 Pro / K80 Ultra）的常量，本机（V2352A）DT 标定是
-#   14100。列表里的 15600 只会带来两个坏处：
-#     · 本机点它一定越界（输入框 max=14100），点了就标红，纯干扰
-#     · 每行 7 个药丸在窄屏上必然折两行，把表格撑得很高
-#   超频档（CAL_OC=1）时 cal_max() 会自动算出 15600，输入框上限跟着放宽，
-#   用户直接手填即可 —— 这个参考药丸不再是唯一的入口，去掉不损失能力。
-VALID_CURRENTS="4765 5765 7720 9720 11720 14100"
+# 实测有效的电流台阶列表（来自 V2507A DT vivo,normal-tc-data-4）：
+#   15600 / 11720 / 9720 / 7720 / 6056 mA
+VALID_CURRENTS="6056 7720 9720 11720 15600"
 
-# ★ v3513 上限口径重构（本机适配）
-#
-# 【问题】上一版把 cal_max() 直接绑到 DT 的 vivo,fchg-curr-max-ma（本机 14100），
-#   于是：
-#     · 段位表 / 总闸 / 封顶的输入上限全被压到 14100
-#     · 用户在段位框里填 15600 立刻被标红「超出 0~14100」
-#     · CAL_MAX=15600 这个常量变成死代码，永远读不到
-#   但实测（2026-10-21，DCHG_FCC/force_val）：
-#     echo 15600 > force_val  -> readback 15600   ✅ 通道接受
-#     echo 20000 > force_val  -> readback 20000   ✅ 通道不裁剪
-#   也就是说 14100 是【驱动 DT 声明的默认档位】，不是硬件拒绝写入的硬墙；
-#   判决层是强制通道，写多少就生效多少。原版对 X200 Pro / K80 Ultra
-#   用的 15600 在那些机器上可用，说明这个"软件上限"本来就该由用户说了算。
-#
-# 【v3515 方案 B：默认本机值 + 可选超频档】
-#
-#   ★★ 重要更正（2026-10-21 实测）★★
-#   15600 这个数字【不是本机的】，它是上游通用版针对 X200 Pro / K80 Ultra 写死的常量。
-#   本机（iQOO Z9 Turbo / V2352A）DT 实测：
-#       /sys/firmware/devicetree/base/soc/vfcs/vivo,fchg-curr-max-ma
-#       原始字节 0 0 55 20 = 14100
-#   上一版把 cal_max 抬到 max(14100, 15600) = 15600，
-#   等于让外来值覆盖了本机标定 —— 本次改为：
-#
-#     · 默认  cal_max = 本机 DT 值（14100）        ← 保守，有实测依据
-#     · 可选  cal_max = max(DT, CAL_OC_MAX)       ← 仅当 CAL_OC=1 时
-#
-#   【超频档是什么】pmic-votable 的 DCHG_FCC 是强制通道，实测写入 15600
-#   回读 15600、写入 20000 回读 20000，通道本身不做裁剪。
-#   但"通道收下这个数" ≠ "充电 IC 真按这个数交付"：
-#     · DT 标 14100 是厂商标定的设计上限
-#     · 实际能否跑高还取决于充电器协议、电池电压天花板、驱动内部限流
-#   所以 CAL_OC 默认关闭，界面上明确标红「超出本机 DT 标定，风险自负」。
-#
-#   【想要 80W 就必须开它】14100mA × 4.45V = 62.7W 电池侧 ≈ 70W 输入侧；
-#   15600mA × 4.45V = 69.4W 电池侧 ≈ 77W 输入侧（按 90% 效率）。
-CAL_OC=0                 # 超频档开关：0=只用本机 DT 值，1=允许到 CAL_OC_MAX
-CAL_OC_MAX=15600         # 超频档允许的最高电流（跨机型通用常量，非本机标定）
-# ★ v3515：兜底值也改成本机 14100（原来是 15600）。
-#   兜底只在「DT 完全读不到」时触发；此时没有任何本机依据，
-#   取本机标定值 14100 比取外来 15600 更保守。
-#   实测验证：DT 为空时 cal_max() = 14100；超频档下仍可到 15600。
-CAL_MAX=14100            # 兼容保留：DT 完全读不到时的最后兜底值
+# ★ V2507A 原生上限：
+#   /sys/firmware/devicetree/base/vfcs/vivo,fchg-curr-max-ma = 15600
+#   （PPS 上限 10000mA / UFCS 上限 8000mA / vivo,max-power-current-limit-ma = 15680）。
+#   vfcs-core.ko 内核回调会在 DCHG_FCC 层把最终电流钳制在 DT 上限以内。
+CAL_OC=0                 # Overclock switch: 0=device DT limit only, 1=allow up to CAL_OC_MAX
+CAL_OC_MAX=15600         # Native device DT max is 15600
+CAL_MAX=15600            # Compat fallback when DT is completely unreadable
 # 绝对上限保护线：任何情况下都不允许超过它。
 #   20000 是 PMIC 判决层能接受的最大量级（实测 20000 可写入），
 #   再高就纯属误填，没有物理意义。
@@ -328,14 +265,14 @@ CAL_DT_MAX_CACHE=""
 #   THERM_STOP  : 停止干预的板级温度（0.1C）—— 达到后完全交回系统
 #   中间档由 THERM_START/THERM_STOP 线性派生，保证单调。
 THERM_EN=1
-THERM_START=650          # 65.0C 开始降流
-THERM_STOP=790           # 79.0C 停止干预
+THERM_START=460          # 46.0C start throttling
+THERM_STOP=540           # 54.0C stop intervention
 
 # ---- 防掉档安全封顶（WebUI 可调）----
 #   SAFE_EN     : 防降流/防掉档总开关
 #   SAFE_CAP    : 叠加在 SOC 表之上的电流天花板（0=不用本层）
 SAFE_EN=1
-SAFE_CAP=0               # 0 = 按机型默认反推（见 load_safe_table）
+SAFE_CAP=0               # 0 = derive from model default (see load_safe_table)
 
 # ---- 设备类别（运行期探测，见 dev_class）----
 #   qcom = 骁龙（注入判决层为主逻辑）
@@ -343,12 +280,11 @@ SAFE_CAP=0               # 0 = 按机型默认反推（见 load_safe_table）
 DEV_CLASS=""
 DEV_MODEL=""
 
-# DT 声明的电流上限（只读参考值，不做钳制用）
-#   本机实测三条：
-#     vivo,fchg-curr-max-ma      14100  普通闪充
-#     vivo,pps-fchg-curr-max-ma  10000  PPS
-#     vivo,ufcs-fchg-curr-max-ma  8000  UFCS
-#   cal_max() 取的是第一条（普通闪充通道），这是实际注入时走的通道。
+# DT 声明的电流上限（只读参考值，V2507A 实测）：
+#   vivo,fchg-curr-max-ma      15600  普通闪充
+#   vivo,pps-fchg-curr-max-ma  10000  PPS
+#   vivo,ufcs-fchg-curr-max-ma  8000  UFCS
+#   cal_max() 取的是第一条（普通闪充通道）。
 cal_dt_max() {
 	local v
 	[ -n "$CAL_DT_MAX_CACHE" ] && { echo "$CAL_DT_MAX_CACHE"; return 0; }
@@ -401,7 +337,7 @@ cal_max() {
 	else
 		# 读不到 DT：不编造，用 CAL_MAX 兜底并记录（WebUI 会显示 calDt=null）
 		v="$CAL_MAX"
-		case "$v" in ''|*[!0-9]*) v=14100 ;; esac
+		case "$v" in ''|*[!0-9]*) v=15600 ;; esac
 	fi
 
 	# 绝对保护线：任何情形都不允许超过
@@ -425,12 +361,12 @@ cal_max_refresh() {
 CAL_DANGER=3000
 
 ACTIVE=1
-PROFILE_NAME="激进"
+PROFILE_NAME="Aggressive"
 PROF_FP=""
 
-SEG_LOW_NAME="超档";  SEG_MID_NAME="高档"
-SEG_PEAK_NAME="峰值"; SEG_MID2_NAME="中档"
-SEG_LOW2_NAME="低档"
+SEG_LOW_NAME="Ultra"; SEG_MID_NAME="High"
+SEG_PEAK_NAME="Peak"; SEG_MID2_NAME="Mid"
+SEG_LOW2_NAME="Low"
 
 RESTORE_MA=9720
 
@@ -450,7 +386,7 @@ restore_ma() {
 	echo "$cap"
 }
 
-ORIG_FILE="/data/adb/v2352a_charge_boost.orig"
+ORIG_FILE="/data/adb/v2507a_charge_boost.orig"
 
 DT_BASE=""
 
@@ -465,7 +401,6 @@ DT_CUR_MAX_NODES="
 #   原厂档(3)直接 exit 0 不干预，这段永远用不到）
 BASELINE_SEGS_AUTO=""
 
-ORIG_FILE="/data/adb/v2352a_charge_boost.orig"
 MOD_WROTE=0
 
 INTERVAL=2
@@ -501,7 +436,7 @@ INTERVAL_DEEP=20
 SLEEP_NOW=2
 interval_now() {
 	case "$1" in
-		4|5) SLEEP_NOW="$INTERVAL_IDLE" ;;   # 未插电 / SOC 超范围
+		4|5) SLEEP_NOW="$INTERVAL_IDLE" ;;   # Unplugged / SOC out of range
 		*)   SLEEP_NOW="$INTERVAL" ;;
 	esac
 	return 0
@@ -526,8 +461,8 @@ THERM_TEMP_MED=0
 THERM_RECOVER_T=0
 THERM_LAST_LOG=""
 
-LOG_MAX_BYTES=262144   # 256KB。超过就改名保留一份 .1（不删除，避免多一次 fork）
-LOG_SZ_CHECKED=0       # 同一进程内最多检查一次大小：stat 每 2 秒跑一次太浪费
+LOG_MAX_BYTES=262144   # 256KB. Rotate one .1 backup when exceeded (no delete, avoids extra fork)
+LOG_SZ_CHECKED=0       # Check size at most once per process: stat every 2s is too costly
 
 # ★ v3517：日志总开关（1=记录 0=不记录）
 #   由 profile 里的 LOG_EN 驱动，可在 WebUI 一键切换。
@@ -878,7 +813,7 @@ read_temp_desc() {
 	else
 		temp="$tc"
 	fi
-	printf "板级 %s / 电池 %s" \
+	printf "Board %s / Batt %s" \
 		"$([ -n "$tb" ] && echo "$(($tb/10)).$(($tb%10))C" || echo "—")" \
 		"$([ -n "$tc" ] && echo "$(($tc/10)).$(($tc%10))C" || echo "—")"
 }
@@ -886,7 +821,7 @@ read_temp_desc() {
 _tname_of() {
 	local p=$1 zn t
 	case "$p" in
-		'') echo "（未探测到）"; return ;;
+		'') echo "(not detected)"; return ;;
 		*/thermal/thermal_zone*/temp)
 
 			zn=${p#*/thermal/}
@@ -898,7 +833,7 @@ _tname_of() {
 		*/cms_class/*)
 
 			zn=${p#*/cms_class/}
-			echo "cms_class/$zn（厂商主口径）"
+			echo "cms_class/$zn (vendor primary)"
 			;;
 		*/power_supply/battery/*)
 			zn=${p#*/power_supply/battery/}
@@ -931,7 +866,7 @@ read_temp_source() {
 		echo "$f"
 		return
 	done
-	echo "（读不到任何温度节点）"
+	echo "(no temperature node readable)"
 }
 
 read_ibat() {
@@ -1209,7 +1144,7 @@ read_online_fast() {
 #   旧版 rc=8 完全不入日志，用户看到的是"这次什么记录都没有"。
 PROTO_UV_LAST=""
 
-HIGHV_FLAG_FILE="/data/adb/v2352a_charge_boost.highv"
+HIGHV_FLAG_FILE="/data/adb/v2507a_charge_boost.highv"
 HIGHV_SEEN=""
 if [ -f "$HIGHV_FLAG_FILE" ]; then
 	_v=$(cat "$HIGHV_FLAG_FILE" 2>/dev/null)
@@ -1300,17 +1235,17 @@ load_safe_table() {
 	# （仅保留反应式防掉压，见 apply_safe_ceiling）。
 	if [ "$SAFE_CAP" -gt 0 ] 2>/dev/null; then
 		SAFE_LOW=$SAFE_CAP; SAFE_MID=$SAFE_CAP; SAFE_HIGH=$SAFE_CAP
-		SAFE_LOW_ACTIVE="${m:-未知}/自定义${SAFE_CAP}"
+		SAFE_LOW_ACTIVE="${m:-unknown}/custom-${SAFE_CAP}"
 	else
 		SAFE_LOW=0; SAFE_MID=0; SAFE_HIGH=0
-		SAFE_LOW_ACTIVE="${m:-未知}/反应式"
+		SAFE_LOW_ACTIVE="${m:-unknown}/reactive"
 	fi
 	# 只在结果真的变化时打日志：本函数会在每次配置热重载后重跑，
 	# 若每轮都打会把日志刷满，掩盖真正的状态变化。
 	local _sig="$DEV_CLASS|$SAFE_LOW|$SAFE_CAP|$THERM_EN"
 	if [ "$_sig" != "$SAFE_LOG_SIG" ]; then
 		SAFE_LOG_SIG="$_sig"
-		log "设备类别=$DEV_CLASS 机型=${m:-未知} 静态上限=${SAFE_LOW:-(无)} 温控=${THERM_EN}"
+		log "dev_class=$DEV_CLASS model=${m:-unknown} static_cap=${SAFE_LOW:-(none)} therm=${THERM_EN}"
 	fi
 	return 0
 }
@@ -1376,7 +1311,7 @@ apply_safe_ceiling() {
 		if [ "$cur" -gt "$safe" ]; then
 			[ "$LOG_PREV_CAP" = "$cur:$safe" ] || {
 				LOG_PREV_CAP="$cur:$safe"
-				log "静态封顶: $cur -> $safe (SOC=${soc}%)"
+				log "Static cap: $cur -> $safe (SOC=${soc}%)"
 			}
 			cur="$safe"
 		fi
@@ -1451,12 +1386,32 @@ protocol_ready() {
 		fi
 	fi
 
-	#   实测（V2405DA 诊断）：节点真名是 `debug_chg_protocol_support`，
-	#   而旧代码只读 `chg_protocol_support` -> 读不到 -> ps 为空 ->
-	#   protocol_ready 永远返回失败 -> 守护每轮 return 8 -> 注入从未发生。
-	#   （开关能打开是因为它只探测 voter 通道，与本节点无关。）
-	#   `main_sm` 是状态机文本（main_sm:0 INIT），协议就绪后应出现更多状态，
-	#   拿不到具体状态时以 chg_protocol_support 为准。
+	# ★ V2507A (MT6991 / vfcs-core.ko) 原生协议门禁：
+	#   1. debug_chg_protocol_support 为调试屏蔽掩码，常态为 0x0；
+	#   2. chg_protocol_support 为静态 DT 能力位掩码（常态 0x3f，5V USB 也是 0x3f）；
+	#   3. 运行时是否真正进入快充由 cms_class/fastchg_is_ok=1、
+	#      vfcs_class/debug_main_sm(!=INIT) 或 高压供电(>=8V) 决定。
+	local _fok="" _sm="" _has_dyn=0
+	if [ -r /sys/class/cms_class/fastchg_is_ok ]; then
+		_has_dyn=1
+		PROTO_NODE_MISSING=0
+		read -r _fok < /sys/class/cms_class/fastchg_is_ok 2>/dev/null
+		[ "$_fok" = "1" ] && return 0
+	fi
+	if [ -r /sys/class/vfcs_class/debug_main_sm ]; then
+		_has_dyn=1
+		PROTO_NODE_MISSING=0
+		_sm=$(cat /sys/class/vfcs_class/debug_main_sm 2>/dev/null)
+		_sm=$(printf '%s' "$_sm" | tr -d '\r\n')
+		if [ -n "$_sm" ]; then
+			case "$_sm" in
+				*INIT*|*IDLE*|'main_sm:0'|'0') : ;;
+				*) return 0 ;;
+			esac
+		fi
+	fi
+	[ "$_has_dyn" = "1" ] && return 1
+
 	local ps _pf
 	for _pf in /sys/class/vfcs_class/debug_chg_protocol_support \
 	           /sys/class/vfcs_class/chg_protocol_support \
@@ -1464,49 +1419,27 @@ protocol_ready() {
 		ps=$(cat "$_pf" 2>/dev/null)
 		case "$ps" in
 			''|*[!0-9a-fA-FxX]*) continue ;;
-			*) PROTO_NODE_MISSING=0; break ;;
+		esac
+		PROTO_NODE_MISSING=0
+		ps=$(printf '%s' "$ps" | tr -d ' \t\r\n')
+		case "$ps" in
+			0x*) ps=${ps#0x} ;;
+			0X*) ps=${ps#0X} ;;
+		esac
+		case "$ps" in
+			''|*[!0-9a-fA-F]*|?????????*|0|00|000|0000|00000|000000|0000000|00000000) continue ;;
+			*) return 0 ;;
 		esac
 	done
-	[ -n "$ps" ] || PROTO_NODE_MISSING=1
+	[ "$PROTO_NODE_MISSING" = "0" ] || PROTO_NODE_MISSING=1
 
-	ps=$(printf '%s' "$ps" | tr -d ' \t\r\n')
-
-	case "$ps" in
-		0x*) ps=${ps#0x} ;;
-		0X*) ps=${ps#0X} ;;
-	esac
-
-	case "$ps" in
-		''|*[!0-9a-fA-F]*) : ;;
-		?????????*) : ;;
-		*)
-
-			case "$ps" in
-				0|00|000|0000|00000|000000|0000000|00000000) : ;;
-				*)
-					return 0
-					;;
-			esac
-			;;
-	esac
-
-	# ---- 协议节点完全不存在时的降级 ----
-	# 【为什么不能直接 return 1】判决层注入(force_active)本身是【持续生效】的
-	#   强制通道，不是一次性写完就完。若因为读不到一个 debug 节点就永不就绪，
-	#   守护会每轮 return 8，注入一次都不会发生 —— 那还不如不装。
-	#   120w 模块的主循环同样没有任何协议门禁，无条件每 2 秒注入一次。
-	# 这里放宽为：节点读不到时，只要已经见过工作电压就放行
-	#（说明充电链路已建立），并做一次提示。
-	# 这里放宽为：节点读不到时，只要【已经建立工作电压】就放行。
-	# 电压门槛取 5V（5000000mV）—— 低于此说明充电链路还没起来，
-	# 此时放行等于在协议协商前就抢跑，反而会钉死 IC。
 	case "$uv" in
 		''|*[!0-9]*) : ;;
 		*)
 			[ "$uv" -ge 5000000 ] || return 1
 			[ "$PROTO_WARNED" = "1" ] || {
 				PROTO_WARNED=1
-				log "提示: 本机无 chg_protocol_support 节点，协议门禁降级为按工作电压(>=5V)放行"
+				log "Info: no dynamic protocol node; falling back to VBUS >= 5V gate"
 			}
 			return 0
 			;;
@@ -1714,7 +1647,7 @@ target_current() {
 			if [ "$v" -gt "$_cap" ]; then
 				[ "$LOG_PREV_MAX" = "$v:$_cap" ] || {
 					LOG_PREV_MAX="$v:$_cap"
-					log "目标电流 $v 超过本机上限 ${_cap}mA，已钳制到 ${_cap}"
+					log "Target current $v exceeds device max ${_cap}mA; clamped to ${_cap}"
 				}
 				v="$_cap"
 			fi
@@ -1754,7 +1687,7 @@ target_current() {
 								if [ "$v" -gt "$_pcap" ]; then
 									[ "$LOG_PREV_PWR" = "${v}:${_vb}:${_pcap}" ] || {
 										LOG_PREV_PWR="${v}:${_vb}:${_pcap}"
-										log "电池 ${_vb}mV 下 ${POWER_CAP_W}W 折算上限 ${_pcap}mA，申请 ${v}mA 已钳制"
+										log "At vbat ${_vb}mV, ${POWER_CAP_W}W cap is ${_pcap}mA; request ${v}mA clamped"
 									}
 									v="$_pcap"
 								fi
@@ -1845,10 +1778,10 @@ push_temp() {
 therm_sync() {
 	local s e d dd
 	s=$THERM_START; e=$THERM_STOP
-	case "$s" in ''|*[!0-9]*) s=650 ;; esac
-	case "$e" in ''|*[!0-9]*) e=790 ;; esac
+	case "$s" in ''|*[!0-9]*) s=460 ;; esac
+	case "$e" in ''|*[!0-9]*) e=540 ;; esac
 	# 合法性：STOP 必须显著高于 START，否则退回默认，避免除零/倒挂
-	[ "$e" -le "$s" ] && { s=650; e=790; }
+	[ "$e" -le "$s" ] && { s=460; e=540; }
 	THERM_START=$s; THERM_STOP=$e
 
 	if [ "$THERM_EN" != "1" ]; then
@@ -2019,12 +1952,12 @@ therm_cap() {
 
 therm_name() {
 	case "$1" in
-		0) echo "正常" ;;
-		1) echo "预警" ;;
-		2) echo "降档A" ;;
-		3) echo "降档B" ;;
-		4) echo "撒手" ;;
-		'') echo "未充电" ;;
+		0) echo "Normal" ;;
+		1) echo "Warn" ;;
+		2) echo "Step A" ;;
+		3) echo "Step B" ;;
+		4) echo "Released" ;;
+		'') echo "Not charging" ;;
 		*) echo "?" ;;
 	esac
 }
@@ -2032,20 +1965,20 @@ therm_name() {
 why_inactive() {
 	local soc=$1 tb=$2 tc=$3 online=$4 tstate=$5
 
-	[ -e "$NODE" ] || { echo "本机没有 $NODE 节点，模块无法干预"; return; }
+	[ -e "$NODE" ] || { echo "Node $NODE missing on this device; cannot intervene"; return; }
 
 	if [ "$online" = "0" ]; then
-		echo "未插入充电器，模块不干预"
+		echo "Charger unplugged; idle"
 		return
 	fi
 
 	if [ -z "$soc" ]; then
-		echo "读不到电量(SOC)，模块无法判断，暂不干预"
+		echo "Cannot read battery level (SOC); standing by"
 		return
 	fi
 
 	if [ "$soc" -lt "$SOC_MIN" ]; then
-		echo "电量 ${soc}% 低于生效下限 ${SOC_MIN}%，已交回系统涓流充电"
+		echo "SOC ${soc}% below active floor ${SOC_MIN}%; handed back for trickle charge"
 		return
 	fi
 	if [ "$soc" -gt "$SOC_MAX" ]; then
@@ -2057,25 +1990,25 @@ why_inactive() {
 		#   【注意】判据是"不等于"而不是"小于"：用户把停止线拉到 100
 		#   （管到满）也是改过，不能说成"出厂保护上限"。
 		if [ "$SOC_MAX" != "$SOC_DEFAULT_MAX" ]; then
-			echo "电量 ${soc}% 已超过你设定的停止介入线 ${SOC_MAX}%，模块已停手（这是你自己设的值，可在「高级→停止介入电量」调整）"
+			echo "SOC ${soc}% exceeds your stop threshold ${SOC_MAX}%; paused (adjust under Advanced -> Stop SOC)"
 		else
-			echo "电量 ${soc}% 已超过生效上限 ${SOC_MAX}%，模块按设计不再干预（保护电芯，可自定义电流不会生效）"
+			echo "SOC ${soc}% exceeds active limit ${SOC_MAX}%; idle by design (cell protection; custom current inactive)"
 		fi
 		return
 	fi
 
 	if [ -z "$tb$tc" ]; then
-		echo "读不到任何温度传感器，模块保守起见不干预（请检查板级温度节点）"
+		echo "No temperature sensors readable; standing by conservatively (check board temp node)"
 		return
 	fi
 	if { [ -n "$tb" ] && [ "$tb" -lt "$TEMP_MIN" ]; } || \
 	   { [ -n "$tc" ] && [ "$tc" -lt "$TEMP_MIN" ]; }; then
-		echo "温度过低，模块暂不干预（低温大电流易析锂）"
+		echo "Temperature too low; holding off (high current risks lithium plating)"
 		return
 	fi
 
 	if [ "$tstate" = "4" ]; then
-		echo "温度过高，已进入撒手态把控制权交回系统，不写节点"
+		echo "Temperature too high; released to stock thermal control"
 		return
 	fi
 
@@ -2286,24 +2219,24 @@ _KEEP_I="$APPLY_DEFAULTS_KEEP_I"
 	case "$1" in
 		2)
 			[ "$_KEEP_I" != "1" ] && { I_LOW=$_I; I_MID=$_I; I_PEAK=$_I; I_MID2=$_I; I_LOW2=$_I; }
-			ACTIVE=2; PROFILE_NAME="温和"
-			SEG_LOW_NAME="温和低段";  SEG_MID_NAME="温和中段"
-			SEG_PEAK_NAME="温和峰值"; SEG_MID2_NAME="温和中高"
-			SEG_LOW2_NAME="温和高段"
+			ACTIVE=2; PROFILE_NAME="Balanced"
+			SEG_LOW_NAME="Bal Low";  SEG_MID_NAME="Bal Mid"
+			SEG_PEAK_NAME="Bal Peak"; SEG_MID2_NAME="Bal MidHi"
+			SEG_LOW2_NAME="Bal Hi"
 			;;
 		3)
 			[ "$_KEEP_I" != "1" ] && { I_LOW=$_I; I_MID=$_I; I_PEAK=$_I; I_MID2=$_I; I_LOW2=$_I; }
-			ACTIVE=3; PROFILE_NAME="原厂"
-			SEG_LOW_NAME="原厂低段";  SEG_MID_NAME="原厂中段"
-			SEG_PEAK_NAME="原厂峰值"; SEG_MID2_NAME="原厂中高"
-			SEG_LOW2_NAME="原厂高段"
+			ACTIVE=3; PROFILE_NAME="Stock"
+			SEG_LOW_NAME="Stk Low";  SEG_MID_NAME="Stk Mid"
+			SEG_PEAK_NAME="Stk Peak"; SEG_MID2_NAME="Stk MidHi"
+			SEG_LOW2_NAME="Stk Hi"
 			;;
 		*)
 			[ "$_KEEP_I" != "1" ] && { I_LOW=$_I; I_MID=$_I; I_PEAK=$_I; I_MID2=$_I; I_LOW2=$_I; }
-			ACTIVE=1; PROFILE_NAME="激进"
-			SEG_LOW_NAME="超档";   SEG_MID_NAME="高档"
-			SEG_PEAK_NAME="峰值";  SEG_MID2_NAME="中档"
-			SEG_LOW2_NAME="低档"
+			ACTIVE=1; PROFILE_NAME="Aggressive"
+			SEG_LOW_NAME="Ultra";   SEG_MID_NAME="High"
+			SEG_PEAK_NAME="Peak";  SEG_MID2_NAME="Mid"
+			SEG_LOW2_NAME="Low"
 			;;
 	esac
 
@@ -2348,8 +2281,13 @@ load_profile() {
 
 	apply_defaults "$a"
 
-	# profile 不存在时也要清标志，否则后续所有 load_profile 都会被重入保护挡掉
+	# profile 不存在时也要完成初始派生与设备识别，否则首次开机 DEV_CLASS 为空
 	if [ ! -f "$PROFILE_FILE" ]; then
+		therm_sync
+		soc_bounds_clamp
+		cal_max_refresh
+		_vt_fix_thresholds
+		load_safe_table
 		PROFILE_LOADING=0
 		return 0
 	fi
@@ -2384,7 +2322,7 @@ load_profile() {
 		esac
 
 		if [ "$v" -gt "$_cap" ]; then
-			log "档位配置: $k=$v 超过本机上限 ${_cap}mA，已钳制到 ${_cap}"
+			log "Profile config: $k=$v exceeds device max ${_cap}mA; clamped to ${_cap}"
 			v="$_cap"
 		fi
 
@@ -2431,7 +2369,7 @@ load_profile() {
 	#       ③ 无标记 / 非法值 → 用新默认 14100
 	#   已是最新版本（_iv == IBAT_VER）的 profile 完全不动。
 	_ibtgt="$IBAT_DEFAULT"
-	case "$_ibtgt" in ''|*[!0-9]*|0) _ibtgt=14100 ;; esac
+	case "$_ibtgt" in ''|*[!0-9]*|0) _ibtgt=15600 ;; esac
 	if [ "$MIGRATING" != "1" ]; then
 		if [ "$_iv" != "$IBAT_VER" ]; then
 			case "$VOTE_IBAT" in
@@ -2442,7 +2380,7 @@ load_profile() {
 					# ① v<=5 且值恰为 9000 -> 那是 v5 的旧默认，抬到 14100
 					if [ -n "$_iv" ] && [ "$_iv" -le 5 ]; then
 						if [ "$VOTE_IBAT" = "9000" ]; then
-							log "总闸 9000mA 是 v5 的旧默认，已抬到本机 DT 标定 ${_ibtgt}mA"
+							log "Total limit 9000mA is old v5 default; raised to device DT calibration ${_ibtgt}mA"
 							VOTE_IBAT="$_ibtgt"
 						fi
 					fi
@@ -2526,10 +2464,10 @@ load_profile() {
 		LADDER_MIGRATE=0
 		IBAT_MIGRATE=0
 		if [ "$_lm" = "1" ]; then
-			log "检测到旧版电流阶梯（按 SOC 预降），已升级为统一 ${I_LOW}mA 并停用预降"
+			log "Legacy current ladder (SOC pre-stepdown) detected; upgraded to uniform ${I_LOW}mA"
 		fi
 		if [ "$_im" = "1" ]; then
-			log "电流总闸默认值已对齐 ${VOTE_IBAT}mA（默认 9000；只回退上一版自动抬高的值，手动改过的不动）"
+			log "Total current limit aligned to ${VOTE_IBAT}mA (default 9000; manual edits preserved)"
 		fi
 		# PROFILE_LOADING 必须先清零，否则 write_profile 内部的 load_profile
 		#   会被重入保护挡掉、读不到配置；改用 MIGRATING 阻止自我递归。
@@ -2596,24 +2534,25 @@ VOT_SEL_LOGGED=0
 #     写 `votset auto` 清除、回到上面的默认两路。
 #   用途：先用 votdiag 看清本机哪个目标「真的有人在投票」，
 #   若确认默认两路是死通道，再手动钉一个 —— 由你决定，不自动切换。
-VOT_PIN_FILE="/data/adb/v2352a_charge_boost.vot_target"
+VOT_PIN_FILE="/data/adb/v2507a_charge_boost.vot_target"
 
 VOTE_IBAT=$IBAT_DEFAULT
-VOTE_T1=340
-VOTE_T2=346
-VOTE_T3=401
-VOTE_T4=450
-VOTE_T5=500
+VOTE_T1=460
+VOTE_T2=480
+VOTE_T3=500
+VOTE_T4=520
+VOTE_T5=540
 
 # 注入阶梯（由 therm_sync 从 THERM_START/STOP 派生，这里是首轮兜底）
-VT_T1=340
-VT_T2=346
-VT_T3=401
-VT_T4=450
-VT_T5=500
+VT_T1=460
+VT_T2=480
+VT_T3=500
+VT_T4=520
+VT_T5=540
 
 VOT_ROOT="/sys/kernel/debug/pmic-votable"
 VOT_OK=""
+VOT_BACKEND=""
 PROTO_NODE_MISSING=0
 PROTO_WARNED=0
 LOG_PREV_CAP=""
@@ -2637,7 +2576,7 @@ VOTE_PCT_FLOOR=63
 VOTE_FLOOR_MIN=1000
 
 _vot_mark_session() {
-	VOT_ORIG_MARK="/data/adb/v2352a_charge_boost.vot_session"
+	VOT_ORIG_MARK="/data/adb/v2507a_charge_boost.vot_session"
 	[ -f "$VOT_ORIG_MARK" ] && return 0
 	local _bid
 	_bid=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
@@ -2653,11 +2592,11 @@ _vot_mark_session() {
 # 不再需要在读配置时排序。此函数仅做非空兜底（防止未调 therm_sync 的
 # 极端路径下出现空值）。
 _vt_fix_thresholds() {
-	[ -n "$VT_T1" ] || VT_T1=340
-	[ -n "$VT_T2" ] || VT_T2=346
-	[ -n "$VT_T3" ] || VT_T3=401
-	[ -n "$VT_T4" ] || VT_T4=450
-	[ -n "$VT_T5" ] || VT_T5=500
+	[ -n "$VT_T1" ] || VT_T1=460
+	[ -n "$VT_T2" ] || VT_T2=480
+	[ -n "$VT_T3" ] || VT_T3=500
+	[ -n "$VT_T4" ] || VT_T4=520
+	[ -n "$VT_T5" ] || VT_T5=540
 	VOTE_T1=$VT_T1; VOTE_T2=$VT_T2; VOTE_T3=$VT_T3
 	VOTE_T4=$VT_T4; VOTE_T5=$VT_T5
 	return 0
@@ -2713,7 +2652,7 @@ vot_resolve_targets() {
 	[ -n "$VOTE_TARGETS_RESOLVED" ] && return 0
 	VOTE_TARGETS_RESOLVED=1
 
-	VOT_SEL_WHY="自适应（本机实测）"
+	VOT_SEL_WHY="Auto (probed)"
 
 	# 唯一的例外：votset 手动钉住。
 	if [ -f "$VOT_PIN_FILE" ]; then
@@ -2726,9 +2665,9 @@ vot_resolve_targets() {
 		d="$VOT_ROOT/$_pin"
 		if [ -d "$d" ] && [ -f "$d/force_active" ] && [ -f "$d/force_val" ]; then
 			VOTE_TARGETS="$_pin"
-			VOT_SEL_WHY="你手动钉住（votset $_pin）"
+			VOT_SEL_WHY="Pinned manually (votset $_pin)"
 		else
-			log "提示: 钉住的目标 $_pin 在本机不存在，已忽略、改走自适应"
+			log "Info: pinned target $_pin missing on device; ignored, using auto"
 		fi
 	fi
 	[ -n "$_pin" ] && return 0
@@ -2817,13 +2756,13 @@ vot_resolve_targets() {
 	_ok=${_ok# }
 	if [ -n "$_ok" ]; then
 		VOTE_TARGETS="$_ok"
-		VOT_SEL_WHY="默认目标不存在，兜底扫到：$_ok"
-		log "提示: 默认目标 $VOTE_TARGETS 在本机不存在，已兜底为：$_ok"
+		VOT_SEL_WHY="Default target missing; fallback scan found: $_ok"
+		log "Info: default target $VOTE_TARGETS missing on device; fallback: $_ok"
 		return 0
 	fi
 
 	VOTE_TARGETS=""
-	VOT_SEL_WHY="本机无 DCHG_FCC 电流口"
+	VOT_SEL_WHY="No DCHG_FCC current port on device"
 	return 0
 }
 
@@ -2886,34 +2825,42 @@ votable_ready() {
 	[ "$VOT_OK" = "0" ] && return 1
 
 	if [ ! -d "$VOT_ROOT" ]; then
-
 		mount -t debugfs none /sys/kernel/debug 2>/dev/null
 	fi
-	if [ ! -d "$VOT_ROOT" ]; then
-		VOT_WHY="debugfs 未挂载或本机无 pmic-votable（MTK 架构实测为空目录）"
-		VOT_OK=0
-		return 1
+	if [ -d "$VOT_ROOT" ]; then
+		vot_resolve_targets
+		if [ -n "$VOTE_TARGETS" ] && _vot_any_ready; then
+			VOT_BACKEND="debugfs"
+			VOT_WHY=""
+			VOT_OK=1
+			if [ "$VOT_SEL_LOGGED" != "1" ]; then
+				VOT_SEL_LOGGED=1
+				log "Inject target: $VOTE_TARGETS ($VOT_SEL_WHY)"
+			fi
+			return 0
+		fi
 	fi
 
-	# ★ 目标自适应解析：必须在任何一次注入之前完成 ——
-	#   注入过之后 status 里会混入我们自己的 DEBUG_FORCE 客户端，
-	#   判据被污染，就再也分不清"本来有人投票"和"只有我们在写"。
-	vot_resolve_targets
-
-	if [ -z "$VOTE_TARGETS" ] || ! _vot_any_ready; then
-		VOT_WHY="pmic-votable 下无 [$VOTE_TARGETS]（缺 force_active/force_val）"
-		VOT_OK=0
-		return 1
+	# ★ V2507A (MT6991 / vfcs-core.ko) 原生直控映射：
+	#   写入 /sys/class/vfcs_class/fchg_fcc_ma 等价于内核调用
+	#   force_active_votable(DCHG_FCC, "VFCS_CLASS_EVENT", val != 0, val)
+	if [ -w "$NODE" ]; then
+		VOTE_TARGETS="DCHG_FCC"
+		VOT_SEL_WHY="vfcs_class/fchg_fcc_ma -> DCHG_FCC (VFCS_CLASS_EVENT)"
+		VOT_BACKEND="sysfs"
+		VOT_WHY=""
+		VOT_OK=1
+		if [ "$VOT_SEL_LOGGED" != "1" ]; then
+			VOT_SEL_LOGGED=1
+			log "Inject target: $VOTE_TARGETS ($VOT_SEL_WHY)"
+		fi
+		return 0
 	fi
 
-	VOT_WHY=""
-	VOT_OK=1
-
-	if [ "$VOT_SEL_LOGGED" != "1" ]; then
-		VOT_SEL_LOGGED=1
-		log "注入目标: $VOTE_TARGETS （$VOT_SEL_WHY）"
-	fi
-	return 0
+	VOT_BACKEND=""
+	VOT_WHY="No pmic-votable and $NODE unavailable"
+	VOT_OK=0
+	return 1
 }
 
 vot_pct_of() {
@@ -2976,9 +2923,15 @@ vot_calc() {
 
 vot_backup() {
 	[ -f "$VOT_ORIG" ] && return 0
+	if [ "$VOT_BACKEND" = "sysfs" ]; then
+		save_original
+		printf '# vfcs_class DCHG_FCC original ledger (recorded once)\n[DCHG_FCC] fchg_fcc_ma=%s\n' \
+			"$(cat "$NODE" 2>/dev/null)" > "$VOT_ORIG" 2>/dev/null
+		return 0
+	fi
 	local t d fa fv seen=" "
 	{
-		echo "# PMIC voter 原值台账（只记首次）"
+		echo "# PMIC voter original ledger (recorded once)"
 		# 【为什么遍历两份】解析目标可能随机型/版本变化，只记当前目标
 		#   会漏掉优先级表里其他目标的原值，卸载时无从还原。去重后全记。
 		for t in $VOTE_TARGETS $VOTE_TARGETS_KNOWN; do
@@ -2996,6 +2949,15 @@ vot_backup() {
 
 vot_release() {
 	local t d seen=" " _scope
+	if [ "$VOT_BACKEND" = "sysfs" ] || { [ -z "$VOT_BACKEND" ] && ! _vot_any_ready && [ -w "$NODE" ]; }; then
+		local _cur_n=""
+		read -r _cur_n < "$NODE" 2>/dev/null
+		if [ -n "$_cur_n" ] && [ "$_cur_n" != "0" ]; then
+			echo 0 > "$NODE" 2>/dev/null
+		fi
+		VOT_WROTE=0
+		return 0
+	fi
 	# ★★ v3565 修复：只释放【自己真正写过的】目标，绝不碰 vivo 自己的通道 ★★
 	#
 	#   【原缺陷】这里原来遍历 $VOTE_TARGETS $VOTE_TARGETS_KNOWN，
@@ -3074,12 +3036,12 @@ vot_inject() {
 	if [ "$(vot_mode_of)" = "ma" ]; then
 		case "$want" in
 			''|*[!0-9]*)
-				log "voter 注入拒绝: 目标值非法（'$want'）"
+				log "Voter inject rejected: invalid target value ('$want')"
 				return 1
 				;;
 		esac
 		if [ "$want" -lt 500 ]; then
-			log "voter 注入拒绝: 目标值 ${want}mA 低于安全下界 500mA（疑似脏值/未初始化）"
+			log "Voter inject rejected: target ${want}mA below 500mA safety floor (dirty/uninit value?)"
 			return 1
 		fi
 		local _cap
@@ -3088,7 +3050,7 @@ vot_inject() {
 			''|*[!0-9]*|0) _cap="" ;;
 		esac
 		if [ -n "$_cap" ] && [ "$want" -gt "$_cap" ]; then
-			log "voter 注入钳制: ${want}mA 超过本机 DT 上限 ${_cap}mA，已压到上限"
+			log "Voter inject clamped: ${want}mA exceeds device DT limit ${_cap}mA"
 			want="$_cap"
 		fi
 	fi
@@ -3098,6 +3060,16 @@ vot_inject() {
 	VOT_WROTE=1
 	VOT_LAST_WANT="$want"
 	_vot_mark_session
+
+	if [ "$VOT_BACKEND" = "sysfs" ]; then
+		if ! write_node "$want"; then
+			cur=$(cat "$NODE" 2>/dev/null)
+			log "vfcs_class inject failed: want ${want}, read ${cur:-empty}; released"
+			vot_release
+			return 1
+		fi
+		return 0
+	fi
 
 	for t in $VOTE_TARGETS; do
 		d="$VOT_ROOT/$t"
@@ -3117,7 +3089,7 @@ vot_inject() {
 
 		cur=$(cat "$d/force_val" 2>/dev/null)
 		if [ "$cur" != "$want" ]; then
-			log "voter 熔断: 期望 ${want} 实读 ${cur}（$t 不接受该值）已停手"
+			log "Voter tripped: want ${want}, read ${cur} ($t rejected value); stopped"
 			vot_release
 			return 1
 		fi
@@ -3197,7 +3169,7 @@ profile_fingerprint_fast() {
 #   改成：daemon 每轮用内建重定向 touch 一个空文件，看门狗只看它的 mtime
 #   是否比本轮开始时的标记新。整个过程零 fork。
 #   注意用内建 `: > file` 而不是 touch 命令，避免多一个子进程。
-HEARTBEAT_FILE=/data/adb/v2352a_charge_boost.beat
+HEARTBEAT_FILE=/data/adb/v2507a_charge_boost.beat
 beat() {
 	: > "$HEARTBEAT_FILE" 2>/dev/null
 	return 0
@@ -3250,7 +3222,7 @@ sweep_instances() {
 		[ -n "$keep" ] && [ "$p" = "$keep" ] && continue
 		kill -9 "$p" 2>/dev/null && n=$((n + 1))
 	done
-	[ "$n" -gt 0 ] && log "实例清扫：强制回收 $n 个遗留守护进程（防止多实例互写节点）"
+	[ "$n" -gt 0 ] && log "Sweep: force-killed $n leftover daemon(s) to prevent concurrent writes"
 	return 0
 }
 
@@ -3311,7 +3283,7 @@ spawn_daemon() {
 
 	if ! try_lock "$LOCKDIR/launch" 10; then
 		if [ -n "$LOCK_HOLDER" ] && kill -0 "$LOCK_HOLDER" 2>/dev/null; then
-			log "启动锁被 pid $LOCK_HOLDER 持有（仍在启动中），本次放弃拉起以免多实例"
+			log "Launch lock held by pid $LOCK_HOLDER (still starting); skipping duplicate spawn"
 			return 0
 		fi
 		rm -rf "$LOCKDIR/launch" 2>/dev/null
@@ -3362,7 +3334,7 @@ save_profile() {
 	local _tmp="${PROFILE_FILE}.tmp.$$"
 
 	{
-		echo "# vivo 充电加速 · 档位配置（由界面生成，可手动编辑）"
+		echo "# vivo Charge Boost · Profile Config (WebUI-generated, manually editable)"
 		echo "ACTIVE=$ACTIVE"
 		echo "VER=3511"
 		# ★ 必须写 LADDER_VER：漏写会让下次 load_profile 误判"旧版阶梯"
@@ -3440,7 +3412,7 @@ write_profile() {
 		rm -f "$PIDFILE" 2>/dev/null
 		# ★ v3524：只清运行期锁，保留 service 单实例锁
 		rm -rf "$LOCKDIR/run" "$LOCKDIR/launch" 2>/dev/null
-		log "档位切换 -> 原厂(3)：已清扫全部实例，交回系统方式=${rwhat:-未知}"
+		log "Profile switch -> Stock(3): swept all instances, method=${rwhat:-unknown}"
 
 		# ============================================================
 		#  ★★ v3533 修：切原厂后主动重写 status.json ★★
@@ -3484,10 +3456,10 @@ write_profile() {
 
 profile_name_of() {
 	case "$1" in
-		1) echo "激进" ;;
-		2) echo "温和" ;;
-		3) echo "原厂" ;;
-		*) echo "未知" ;;
+		1) echo "Aggressive" ;;
+		2) echo "Balanced" ;;
+		3) echo "Stock" ;;
+		*) echo "Unknown" ;;
 	esac
 }
 
@@ -3671,28 +3643,18 @@ do_once() {
 	#  天玑（mtk）：本机无 voter 通道，走 sysfs 申请层 fchg_fcc_ma，
 	#    并叠加防降流安全封顶。
 	# ============================================================
-	if [ "$DEV_CLASS" = "qcom" ] || [ "$DEV_CLASS" = "" ]; then
+	if [ "$DEV_CLASS" = "qcom" ] || [ "$DEV_CLASS" = "" ] || votable_ready >/dev/null 2>&1; then
 		# ★ v3514 修复：VOTE_MODE 此前是【死开关】。
-		#   现象：WebUI 里把「启用硬件直控」关掉，电流照样被注入 ——
-		#   因为这个变量只在 set_cal 里被写入、在 emit_json 里被读出显示，
-		#   主循环 do_once 从头到尾【没有任何一处判断它】。
-		#   现在真正接入：VOTE_MODE=0 时释放判决层并交回系统，
-		#   与「无判决层」分支走同一条安全路径（不写 sysfs，只 vot_release）。
+		#   现在统一接入 qcom (pmic-votable) 与 mtk V2507A (vfcs_class -> DCHG_FCC)：
+		#   VOTE_MODE=0 时释放直控并交回系统。
 		if [ "$VOTE_MODE" != "1" ]; then
-			ST_GEAR="已关闭直控"
+			ST_GEAR="Direct control off"
 			ST_CAP="VOTE_MODE=0"
 			vot_release
 			return 1
 		fi
 		if votable_ready; then
-			# 【注入值 = 电量分段电流（自定义），总闸只作上限】
-			#   旧实现直接注入 vot_calc()（完全由 VOTE_IBAT 派生），
-			#   于是骁龙机上"电量分段电流"保存得进去、却从不参与注入 ——
-			#   现象就是"可以保存但没有用"。现在改为：
-			#       注入值 = min(分段电流 cur_set, 总闸×温度降额)
-			#   分段电流不可用时退回总闸，保证仍有注入、不裸奔；
-			#   默认档（分段 11500、总闸 11500）取小后 = 11500，
-			#   即默认放开到本机 DT 上限；分段设到更低时由分段主导。
+			# 注入值 = min(分段电流 cur_set, 总闸×温度降额)
 			_vot_ib=$cur_set
 			case "$_vot_ib" in
 				''|*[!0-9]*) _vot_ib="" ;;
@@ -3712,20 +3674,20 @@ do_once() {
 			if [ -n "$_vot_ib" ]; then
 				if vot_inject "$_vot_ib"; then
 					ST_CUR="$_vot_ib"
-					ST_GEAR="判决层注入"
+					if [ "$VOT_BACKEND" = "sysfs" ]; then
+						ST_GEAR="DCHG_FCC direct"
+					else
+						ST_GEAR="Voter direct"
+					fi
 					ST_CAP="$_vot_ib"
 					return 0
 				fi
-				ST_CAP="注入熔断"
+				ST_CAP="Inject trip"
 				return 1
 			fi
 		fi
-		#   原因：sysfs 申请层会走 USER_FCC_EVENT 二次裁定，
-		#   驱动可能把值改回去并触发协议重协商 —— 表现就是
-		#   "18V 跑一会自动回 9V、功率反复跳变"。
-		#   宁可这一轮不干预（交回系统），也不要制造掉压。
-		ST_GEAR="交回系统(无判决层)"
-		ST_CAP="判决层不可用"
+		ST_GEAR="Stock control (no direct channel)"
+		ST_CAP="Direct channel unavailable"
 		vot_release
 		return 1
 	fi
@@ -3842,9 +3804,9 @@ read_input_power() {
 	echo "$vb_mv $ib_ma $mw bat"
 }
 
-SESSION_FILE="/data/adb/v2352a_charge_boost.session"
+SESSION_FILE="/data/adb/v2507a_charge_boost.session"
 
-MOD_FINGERPRINTS="9720 11500 15600 11720 7720 5765 4600 4631"
+MOD_FINGERPRINTS="9720 11500 15600 11720 7720 6056 5765 4600 4631"
 
 read_boot_id() {
 	cat /proc/sys/kernel/random/boot_id 2>/dev/null
@@ -3888,7 +3850,7 @@ save_original() {
 	[ "$v" -eq 0 ] && return 1
 
 	if session_wrote_this_boot; then
-		log "拒绝备份节点值 $v：本开机会话模块已写过节点，该值不可信（防跨版本污染）"
+		log "Refusing to back up node $v: already written this boot (cross-version guard)"
 		return 1
 	fi
 
@@ -3899,13 +3861,13 @@ save_original() {
 		if [ -n "$dcv" ] && [ "$dcv" = "$v" ]; then
 			:
 		else
-			log "拒绝备份节点值 $v：命中模块指纹且与 DT 原厂值(${dcv:-未知})不符，疑为历史写入残留"
+			log "Refusing to back up node $v: matches module fingerprint and differs from DT stock (${dcv:-unknown})"
 			return 1
 		fi
 	fi
 
 	echo "$v" > "$ORIG_FILE" 2>/dev/null || return 1
-	log "已备份节点原始值: $v -> $ORIG_FILE"
+	log "Backed up original node value: $v -> $ORIG_FILE"
 	return 0
 }
 
@@ -3950,7 +3912,7 @@ restore_to_system() {
 	case "$_cur" in ''|*[!0-9]*) _cur="" ;; esac
 
 	if [ -e "$NODE" ] && [ "$_cur" = "0" ]; then
-		echo "0 (本机出厂静止态 —— fchg_fcc_ma=0 表示不参与申请，0 即已交回系统)"
+		echo "0 (stock idle state — fchg_fcc_ma=0 skips request; already handed back)"
 		return 0
 	fi
 
@@ -3979,13 +3941,13 @@ restore_to_system() {
 	if [ -e "$NODE" ]; then
 		echo 0 > "$NODE" 2>/dev/null
 		if [ "$(cat "$NODE" 2>/dev/null)" = "0" ]; then
-			echo "0 (本机交回语义 = 不参与申请；原值 ${_cur} 已撤销)"
+			echo "0 (handback = skip request; previous ${_cur} cleared)"
 			return 0
 		fi
-		echo "0 写入失败（节点当前 ${_cur}）"
+		echo "Failed to write 0 (node is ${_cur})"
 		return 1
 	fi
-	echo "节点不存在，无需交回"
+	echo "Node missing, nothing to restore"
 	return 0
 }
 
@@ -4008,7 +3970,7 @@ dt_u32_at() {
 #   【为什么定义在这里】read_aging_stage() 会用它读缓存里的 stage，
 #   必须保证【赋值先于函数调用执行】。放这里即整个脚本靠前位置，
 #   后续 dt_ensure / dt_cache_load 都复用它，不再重复定义。
-DT_CACHE_FILE="/data/adb/v2352a_charge_boost.dtcache"
+DT_CACHE_FILE="/data/adb/v2507a_charge_boost.dtcache"
 
 read_aging_stage() {
 	local v f stage="" cyc derived
@@ -4094,7 +4056,7 @@ read_aging_stage() {
 
 				if [ $((DT_LOG_DONE & 128)) -eq 0 ]; then
 					DT_LOG_DONE=$((DT_LOG_DONE | 128))
-					log "老化档: 节点报 0 不可信; 本机 DT 查表 cycle=$cyc -> 档 $derived"
+					log "Aging stage: node reads 0 (unreliable); DT lookup cycle=$cyc -> stage $derived"
 				fi
 				echo "$derived"
 				return 0
@@ -4102,7 +4064,7 @@ read_aging_stage() {
 
 			if [ $((DT_LOG_DONE & 256)) -eq 0 ]; then
 				DT_LOG_DONE=$((DT_LOG_DONE | 256))
-				log "老化档: 节点报 0, 本机 DT 边界表读不到, 保持 0（未改写）"
+				log "Aging stage: node reads 0, DT boundary table unreadable; keeping 0"
 			fi
 		fi
 	fi
@@ -4275,27 +4237,31 @@ _dt_set_probe() {
 		*cms_v5*)               DT_PLATFORM="qcom" ;;
 		*)                      DT_PLATFORM="unk"  ;;
 	esac
+	# V2507A DT 表包含独立的常温段 250:349（25~34.9℃），200:249 为低温限流段；
+	# 若表内存在 250 段则优先选 250，否则保留合并段 200。
+	DT_SEG_ROW=200
+	[ -n "$(dt_seg_field "$f" 250 0)" ] && DT_SEG_ROW=250
 	case "$how" in
 		exact)
 
 			if [ $((DT_LOG_DONE & 8)) -eq 0 ]; then
 				DT_LOG_DONE=$((DT_LOG_DONE | 8))
-				log "DT 探测成功: ${f##*/}  (平台=${DT_PLATFORM}, 老化档=${stage})"
+				log "DT probe ok: ${f##*/} (platform=${DT_PLATFORM}, stage=${stage})"
 			fi
 			;;
 		fallback0)
 
 			if [ $((DT_LOG_DONE & 16)) -eq 0 ]; then
 				DT_LOG_DONE=$((DT_LOG_DONE | 16))
-				log "DT 探测⚠: 老化档 ${stage} 的表不存在，已退回 ${f##*/}（平台=${DT_PLATFORM}）"
-				log "         -> 恢复值为【未老化档口径】，仅作兜底，不代表本机原厂标定"
+				log "DT probe WARN: aging stage ${stage} table missing, fallback to ${f##*/} (platform=${DT_PLATFORM})"
+				log "         -> fallback uses stage-0 values; not exact device stock"
 			fi
 			;;
 		scanall)
 
 			if [ $((DT_LOG_DONE & 32)) -eq 0 ]; then
 				DT_LOG_DONE=$((DT_LOG_DONE | 32))
-				log "DT 探测⚠: 常规路径均未命中，全盘搜到 ${f}（平台=${DT_PLATFORM}）"
+				log "DT probe WARN: standard paths missed, found ${f} via full scan (platform=${DT_PLATFORM})"
 			fi
 			;;
 	esac
@@ -4314,9 +4280,9 @@ dt_probe() {
 
 		if [ $((DT_LOG_DONE & 64)) -eq 0 ]; then
 			DT_LOG_DONE=$((DT_LOG_DONE | 64))
-			log "DT 探测⚠: 老化档读数为 0，但循环数=${cyc}（明显已老化）"
-			log "         -> power_supply/aging_stage 在本机可能不准；"
-			log "            若恢复值偏高，请核对 cms_v5 dmesg 里的 aging_stage"
+			log "DT probe WARN: aging stage reads 0, but cycles=${cyc} (clearly aged)"
+			log "         -> power_supply/aging_stage may be inaccurate on this device;"
+			log "            verify aging_stage in cms_v5 dmesg if restore value seems high"
 		fi
 	fi
 
@@ -4376,7 +4342,7 @@ dt_probe() {
 
 	if [ $((DT_LOG_DONE & 512)) -eq 0 ]; then
 		DT_LOG_DONE=$((DT_LOG_DONE | 512))
-		log "DT 探测失败：所有候选目录与表名均未命中"
+		log "DT probe failed: no candidate directory or table matched"
 	fi
 	return 1
 }
@@ -4603,7 +4569,7 @@ dt_cur_scale() {
 				   [ $(( (k_use - k_auto) * 100 / k_use )) -gt 40 ]; then
 					[ "$LOG_PREV_SCALE" = "$_base:$k_use:$k_auto:$cap" ] || {
 						LOG_PREV_SCALE="$_base:$k_use:$k_auto:$cap"
-						log "电流换算: 表值max=${_base} 定值x${k_use} 反算x${k_auto}（上限${cap}mA），采纳反算值"
+						log "Current scale: table max=${_base} fixed x${k_use} vs inverse x${k_auto} (cap ${cap}mA); using inverse"
 					}
 					k_use=$k_auto
 				fi
@@ -4778,7 +4744,7 @@ dt_ensure() {
 
 		if [ $((DT_LOG_DONE & 1)) -eq 0 ]; then
 			DT_LOG_DONE=$((DT_LOG_DONE | 1))
-			log "原厂档: DT 表探测失败（三台候选路径均未命中），将退回节点原值"
+			log "Stock profile: DT probe failed across candidates; falling back to node original"
 		fi
 		return 1
 	}
@@ -4790,7 +4756,7 @@ dt_ensure() {
 
 		if [ $((DT_LOG_DONE & 2)) -eq 0 ]; then
 			DT_LOG_DONE=$((DT_LOG_DONE | 2))
-			log "原厂档: DT 表读取失败（$DT_TC_NODE 不可读或格式异常），将退回节点原值"
+			log "Stock profile: DT read failed ($DT_TC_NODE unreadable/invalid); falling back to node original"
 		fi
 		return 1
 	fi
@@ -4808,11 +4774,11 @@ dt_ensure() {
 	if [ $((DT_LOG_DONE & 4)) -eq 0 ]; then
 		DT_LOG_DONE=$((DT_LOG_DONE | 4))
 		if [ -n "$segs" ]; then
-			log "原厂档: 分段边界(自动) -> $segs"
+			log "Stock profile: seg boundaries (auto) -> $segs"
 		else
-			log "原厂档: 分段边界(自动)读取失败"
+			log "Stock profile: seg boundaries (auto) read failed"
 		fi
-		log "原厂档: 已从 DT 载入档位表 -> $t"
+		log "Stock profile: loaded table from DT -> $t"
 	fi
 	return 0
 }
@@ -4873,7 +4839,7 @@ gear_name() {
 
 	local v=$1
 	case "$v" in ''|*[!0-9]*) echo "—"; return ;; esac
-	[ "$v" -eq 0 ] && { echo "停"; return; }
+	[ "$v" -eq 0 ] && { echo "Off"; return; }
 
 	# ---- 第 1 步：直接匹配档位表的语义名 ----
 	[ "$v" = "$I_LOW"  ] && { echo "$SEG_LOW_NAME";  return; }
@@ -4894,9 +4860,9 @@ gear_name() {
 		i=$((i + 1))
 		if [ "$x" = "$v" ]; then
 
-			if [ "$i" -eq 1 ]; then echo "自定义高档"
-			elif [ "$i" -eq "$n" ]; then echo "自定义低档"
-			else echo "自定义第$((n - i + 1))级"
+			if [ "$i" -eq 1 ]; then echo "Custom Hi"
+			elif [ "$i" -eq "$n" ]; then echo "Custom Lo"
+			else echo "Custom Lvl $((n - i + 1))"
 			fi
 			return
 		fi
@@ -4904,53 +4870,53 @@ gear_name() {
 	echo "${v}mA"
 }
 
-# ---------------- 现场描述 ----------------
+# ---------------- Live state summary ----------------
 fmt_state() {
 	local rc=$1
 	local t=""
 
 	if [ -n "$ST_TB" ] || [ -n "$ST_TC" ]; then
-		t=" 板级=$(f10s "$ST_TB")C 电池=$(f10s "$ST_TC")C"
+		t=" Board=$(f10s "$ST_TB")C Batt=$(f10s "$ST_TC")C"
 	elif [ -n "$ST_TEMP" ]; then
-		t=" 温度=$((ST_TEMP/10)).$((ST_TEMP%10))C"
+		t=" Temp=$((ST_TEMP/10)).$((ST_TEMP%10))C"
 	fi
 	local tm=""
 	local v=""
-	[ -n "$ST_VBAT" ] && v=" 电压=${ST_VBAT}mV"
+	[ -n "$ST_VBAT" ] && v=" Vbat=${ST_VBAT}mV"
 	local s=""
 	[ -n "$ST_SOC" ] && s=" SOC=${ST_SOC}%"
 
 	local o=""
 	case "$ST_ONLINE" in
-		1) o=" 插线=是" ;;
-		0) o=" 插线=否" ;;
-		*) o=" 插线=?" ;;
+		1) o=" Plugged=Yes" ;;
+		0) o=" Plugged=No" ;;
+		*) o=" Plugged=?" ;;
 	esac
 
 	local p=""
 	if [ -n "$ST_PWR" ]; then
-		p=" 功率=$((ST_PWR / 1000)).$(((ST_PWR % 1000) / 100))W"
+		p=" Power=$((ST_PWR / 1000)).$(((ST_PWR % 1000) / 100))W"
 		case "$ST_PSRC" in
-			in)  p="${p}(输入侧)" ;;
-			bat) p="${p}(电池侧)" ;;
+			in)  p="${p}(input)" ;;
+			bat) p="${p}(batt)" ;;
 		esac
 	fi
 
 	local th=""
 	case "$ST_THERM" in
-		1) th=" 【预警·表退一档】" ;;
-		2) th=" 【热降档A·封顶${CAP_A}】" ;;
-		3) th=" 【热降档B·封顶${CAP_B}】" ;;
+		1) th=" [Warn·StepDown]" ;;
+		2) th=" [ThermA·Cap${CAP_A}]" ;;
+		3) th=" [ThermB·Cap${CAP_B}]" ;;
 	esac
 
 	case "$rc" in
-		0) echo "充电中${th} |${s}${v}${t}${tm}${o}${p} | 当前档位: ${ST_GEAR} ${ST_CUR}mA" ;;
-		2) echo "温度过低 |${s}${v}${t}${tm}${o}${p}" ;;
-		3) echo "过热撒手(交回系统)${th} |${s}${v}${t}${tm}${o}${p}" ;;
-		4) echo "未充电 |${s}${v}${t}${tm}${o}${p}" ;;
-		5) echo "SOC不在生效区间 |${s}${v}${t}${tm}${o}${p}" ;;
-		7) echo "读数缺失(静默) |${s}${v}${t}${o}" ;;
-		*) echo "节点不可用 rc=$rc" ;;
+		0) echo "Charging${th} |${s}${v}${t}${tm}${o}${p} | Gear: ${ST_GEAR} ${ST_CUR}mA" ;;
+		2) echo "Temp too low |${s}${v}${t}${tm}${o}${p}" ;;
+		3) echo "Overheat released(stock)${th} |${s}${v}${t}${tm}${o}${p}" ;;
+		4) echo "Not charging |${s}${v}${t}${tm}${o}${p}" ;;
+		5) echo "SOC out of range |${s}${v}${t}${tm}${o}${p}" ;;
+		7) echo "Sensor missing(silent) |${s}${v}${t}${o}" ;;
+		*) echo "Node unavailable rc=$rc" ;;
 	esac
 }
 
@@ -4975,7 +4941,7 @@ is_idle_rc() {
 		#      这是持续状态，永远不会自己变好 → 该降频。
 		#   ② vot_inject 失败 → ST_GEAR 保持注入档但 ST_CAP="注入熔断"：
 		#      瞬时故障，下一轮可能就好了 → 必须保持 2 秒快速重试。
-		1) [ "$ST_GEAR" = "已关闭直控" ] && return 0 ; return 1 ;;
+		1) [ "$ST_GEAR" = "Direct control off" ] && return 0 ; return 1 ;;
 	esac
 	return 1
 }
@@ -4985,11 +4951,11 @@ loop() {
 	exec </dev/null >/dev/null 2>&1
 
 	if ! acquire_run_lock; then
-		log "已有守护实例在运行 (pid ${LOCK_HOLDER:-未知})，本实例退出"
+		log "Daemon already running (pid ${LOCK_HOLDER:-unknown}); exiting"
 		exit 0
 	fi
 
-	load_profile   # 内部已含 load_safe_table（安全表随配置重算）
+	load_profile   # Also updates load_safe_table
 
 	profile_fingerprint_fast
 	PROF_FP="$PROF_FP_NOW"
@@ -4998,15 +4964,15 @@ loop() {
 		rwhat=$(restore_to_system)
 		rm -f "$PIDFILE" 2>/dev/null
 		release_run_lock
-		log "档位=原厂(3)，守护进程退出，不干预（交回系统方式=${rwhat:-未知}）"
+		log "Profile=Stock(3); daemon exiting idle (method=${rwhat:-unknown})"
 		exit 0
 	fi
 
-	log "启动 SOC加速守护 [档位=$PROFILE_NAME]"
-	log "  生效区间: 温度 ${TEMP_MIN}~${TEMP_RELEASE}(0.1C)  SOC ${SOC_MIN}~${SOC_MAX}%"
-	log "  申请值: I_LOW=$I_LOW I_MID=$I_MID I_PEAK=$I_PEAK I_MID2=$I_MID2 I_LOW2=$I_LOW2"
-	log "  热保护: 预警=${TEMP_WARN} 降A=${TEMP_CAP_A}(封顶${CAP_A}) 降B=${TEMP_CAP_B}(封顶${CAP_B})"
-	log "          撒手=${TEMP_RELEASE} 恢复≤${TEMP_RECOVER}持续${TEMP_RECOVER_SEC}s 温度取${TEMP_HIST_N}点中位"
+	log "Starting SOC Boost daemon [Profile=$PROFILE_NAME]"
+	log "  Active range: temp ${TEMP_MIN}~${TEMP_RELEASE}(0.1C)  SOC ${SOC_MIN}~${SOC_MAX}%"
+	log "  Requests: I_LOW=$I_LOW I_MID=$I_MID I_PEAK=$I_PEAK I_MID2=$I_MID2 I_LOW2=$I_LOW2"
+	log "  Thermal: warn=${TEMP_WARN} capA=${TEMP_CAP_A}(cap ${CAP_A}) capB=${TEMP_CAP_B}(cap ${CAP_B})"
+	log "           release=${TEMP_RELEASE} recover<=${TEMP_RECOVER} for ${TEMP_RECOVER_SEC}s (median of ${TEMP_HIST_N})"
 
 	# ★★★ v3569：三合一状态机（本轮核心重构）★★★
 	#   【改造前】loop() 开头有三个独立循环，层层嵌套：
@@ -5037,7 +5003,7 @@ loop() {
 	#     · save_original 由 write_node 在首次真正写节点时调用，比原来更精确
 	#       （原地是协议就绪就调，即使这一轮没写任何节点）
 	#     · 插电瞬间的最长响应从 10 秒变为 20 秒（按用户要求把 10s 调成 20s）
-	log "启动 SOC加速守护（v3569 单循环架构）[档位=$PROFILE_NAME]"
+	log "Starting SOC Boost daemon (v3569 single-loop) [Profile=$PROFILE_NAME]"
 
 
 
@@ -5062,7 +5028,7 @@ loop() {
 				PAUSED_ON=1
 				# 撤掉干预：判决层解 force + sysfs 交回 + 属性/场景回原值
 				restore_to_system
-				log "临时解除加速：已撤掉注入/节点/属性/场景，守护转入空转"
+				log "Boost paused: cleared inject/node/props/scene; daemon idling"
 			fi
 			# ★ v3569：暂停态同样不刷 status.json（理由同上，前端直读）
 			sleep "$INTERVAL_IDLE"
@@ -5071,7 +5037,7 @@ loop() {
 		fi
 		if [ "$PAUSED_ON" = "1" ]; then
 			PAUSED_ON=0
-			log "恢复加速：临时解除标记已清除，重新按档位干预"
+			log "Boost resumed: pause flag cleared; resuming intervention"
 			profile_fingerprint_fast
 	PROF_FP="$PROF_FP_NOW"
 			last_rc=-1; last_gear="-"; last_therm=""
@@ -5105,7 +5071,7 @@ loop() {
 				vot_release
 				refresh_cache
 				last_online="0"
-				log "充电器已拔出：撤销全部干预，转入深度休眠（未插电时零轮询）"
+				log "Charger unplugged: released all controls; entering deep sleep (zero polling)"
 			fi
 			# ★★★ v3569：未插电时【完全停止】 status.json 轮询 ★★★
 			#   用户要求"日常使用约等于 0 后台"，而这份缓存在未插电时毫无价值：
@@ -5123,7 +5089,7 @@ loop() {
 			session_reset
 			last_rc=-1; last_gear="-"; last_therm=""
 			pend_rc=-1; pend_cnt=0
-			log "检测到新的充电会话（充电器重新上线），已复位上次会话残留的协议/温度状态"
+			log "New charge session detected (charger online); reset prior protocol/thermal state"
 		fi
 		last_online="$_ol"
 
@@ -5140,11 +5106,11 @@ loop() {
 				rwhat=$(restore_to_system)
 				rm -f "$PIDFILE" 2>/dev/null
 				release_run_lock
-				log "档位热重载 -> 原厂(3)，停止干预并退出（交回系统方式=${rwhat:-未知}）"
+				log "Hot reload -> Stock(3); stopped and exiting (method=${rwhat:-unknown})"
 				exit 0
 			fi
 
-			log "档位热重载 -> $PROFILE_NAME (I_LOW=$I_LOW I_MID=$I_MID I_PEAK=$I_PEAK I_MID2=$I_MID2 I_LOW2=$I_LOW2)"
+			log "Hot reload -> $PROFILE_NAME (I_LOW=$I_LOW I_MID=$I_MID I_PEAK=$I_PEAK I_MID2=$I_MID2 I_LOW2=$I_LOW2)"
 
 			do_once >/dev/null 2>&1
 
@@ -5214,7 +5180,7 @@ loop() {
 		#   （vot_release 只对 active=1 的目标动手，本身是安全的）。
 		if [ "$rc" != "0" ] && [ "$VOT_WROTE" != "0" ]; then
 			vot_release
-			log "交回系统：rc=$rc $(fmt_state "$rc")（末次注入 ${VOT_LAST_WANT:-未知}mA 已撤销）"
+			log "Handed back: rc=$rc $(fmt_state "$rc") (last inject ${VOT_LAST_WANT:-unknown}mA cleared)"
 		fi
 
 		# ---- 静默状态也要留痕（修诊断盲区）----
@@ -5226,9 +5192,9 @@ loop() {
 		if [ "$rc" -eq 7 ] || [ "$rc" -eq 1 ] || [ "$rc" -eq 8 ]; then
 			if [ "$rc" -ne "$last_rc" ]; then
 				if [ "$rc" -eq 8 ]; then
-					log "干预被门禁挡下 -> 协议未就绪(rc=8) [工作电压=${PROTO_UV_LAST:-读不到}uV 协议节点缺失=${PROTO_NODE_MISSING:-0}]"
+					log "Blocked by gate -> protocol not ready(rc=8) [vbus=${PROTO_UV_LAST:-unreadable}uV proto_node_missing=${PROTO_NODE_MISSING:-0}]"
 				else
-					log "静默状态 -> $(fmt_state "$rc")"
+					log "Silent state -> $(fmt_state "$rc")"
 				fi
 				last_rc=$rc
 				last_gear="-"
@@ -5245,7 +5211,7 @@ loop() {
 		if [ "$ST_THERM" != "$last_therm" ]; then
 			[ "$LOG_PREV_THERM" = "$ST_THERM" ] || {
 				LOG_PREV_THERM="$ST_THERM"
-				log "热保护状态 -> $(therm_name "$ST_THERM") [板级=$(f10s "$ST_TB_MED") 电池=$(f10s "$ST_TC_MED")]"
+				log "Thermal state -> $(therm_name "$ST_THERM") [Board=$(f10s "$ST_TB_MED") Batt=$(f10s "$ST_TC_MED")]"
 			}
 			last_therm="$ST_THERM"
 
@@ -5429,7 +5395,7 @@ emit_json() {
 		fi
 	else
 		_cap_live="$(cal_max 2>/dev/null)"
-		case "$_cap_live" in ''|*[!0-9]*) _cap_live=14100 ;; esac
+		case "$_cap_live" in ''|*[!0-9]*) _cap_live=15600 ;; esac
 	fi
 
 	# ★ v3543：复用上面 prof_live_flags 的结果，不再单独 fork 一次。
@@ -5669,18 +5635,18 @@ _vote_set() {
 
 	case "$_k" in
 		vote_target)
-			# 目标已固定为 USER_IBAT + USER_IBUS（对齐 120w），不再可切换。
 			# 保留这个键只为兼容旧版 WebUI 的调用，收到即回成功。
 			VOT_OK=""
+			VOT_BACKEND=""
 			return 0
 			;;
 		vote_mode|vote_ibat|vote_t1|vote_t2|vote_t3|vote_t4|vote_t5)
 			case "$_v" in
-				''|*[!0-9]*) echo "ERR: 值必须是非负整数（收到 '$_v'）"; return 1 ;;
+				''|*[!0-9]*) echo "ERR: Value must be a non-negative integer (got '$_v')"; return 1 ;;
 			esac
 			;;
 		*)
-			echo "ERR: 未知的硬件直控参数 $_k"
+			echo "ERR: Unknown direct-control key $_k"
 			return 1
 			;;
 	esac
@@ -5690,10 +5656,11 @@ _vote_set() {
 
 			if [ "$_v" = "1" ]; then
 				load_profile
+				VOT_OK=""; VOT_BACKEND=""
 				votable_ready
 				if [ "$VOT_OK" != "1" ]; then
-					echo "ERR: 本机不支持硬件直控（$VOT_WHY）"
-					echo "HINT: 骁龙机型（V2408A/V2463A）实测可用；V2405A 等 MTK 机型不可用"
+					echo "ERR: Hardware direct control unsupported ($VOT_WHY)"
+					echo "HINT: Requires pmic-votable or writable $NODE"
 					return 1
 				fi
 			fi
@@ -5704,12 +5671,12 @@ _vote_set() {
 		vote_ibat)
 
 			if [ "$_v" -lt "$VOTE_FLOOR_MIN" ]; then
-				echo "ERR: 电流总闸 $_v 低于安全下限 ${VOTE_FLOOR_MIN}mA（低于此值会掉进约13W 死区，0 等于掐死充电）"
+				echo "ERR: Total current limit $_v below safety floor ${VOTE_FLOOR_MIN}mA (~13W deadzone; 0 stalls charging)"
 				return 1
 			fi
 
 			if [ "$_v" -gt "$CAL_ABS_HARD" ]; then
-				echo "ERR: 电流总闸 $_v 超过 ${CAL_ABS_HARD}mA，疑似误填（本机当前可用上限 $(cal_max)）"
+				echo "ERR: Total current limit $_v exceeds ${CAL_ABS_HARD}mA (current device max $(cal_max))"
 				return 1
 			fi
 			VOTE_IBAT=$_v
@@ -5717,7 +5684,7 @@ _vote_set() {
 		vote_t1|vote_t2|vote_t3|vote_t4|vote_t5)
 
 			if [ "$_v" -gt 1200 ]; then
-				echo "ERR: 温度门限 $_v 超过 1200（=120.0℃），请检查是否误填了摄氏度数"
+				echo "ERR: Temp threshold $_v exceeds 1200 (=120.0C); check unit (0.1C)"
 				return 1
 			fi
 			case "$_k" in
@@ -5729,20 +5696,20 @@ _vote_set() {
 			esac
 			;;
 		*)
-			echo "ERR: 未知的硬件直控参数 $_k"
+			echo "ERR: Unknown direct-control key $_k"
 			return 1
 			;;
 	esac
 
 	# 落盘统一出口（v3.5.11 起只有 save_profile 一处写 profile）
-	save_profile || { echo "ERR: 写配置失败"; return 1; }
+	save_profile || { echo "ERR: Failed to save profile"; return 1; }
 
 	echo "OK $_k=$_v"
 	return 0
 }
 
-# ---- 温控 / 防掉档参数写入（WebUI 调用）----
-#   单位：therm_start/therm_stop = 0.1C；safe_cap = mA（0=反应式，不静态封顶）
+# ---- Thermal / safety parameter write (called by WebUI) ----
+#   Units: therm_start/therm_stop = 0.1C; safe_cap = mA (0=reactive, no static cap)
 _cfg_set() {
 	local _k=$1 _v=$2
 
@@ -5750,32 +5717,32 @@ _cfg_set() {
 	load_profile
 
 	case "$_v" in
-		''|*[!0-9]*) echo "ERR: 值必须是非负整数（收到 '$_v'）"; return 1 ;;
+		''|*[!0-9]*) echo "ERR: Value must be a non-negative integer (got '$_v')"; return 1 ;;
 	esac
 
 	case "$_k" in
 		therm_en)
-			case "$_v" in 0|1) THERM_EN=$_v ;; *) echo "ERR: 温控开关只能是 0/1"; return 1 ;; esac
+			case "$_v" in 0|1) THERM_EN=$_v ;; *) echo "ERR: therm_en must be 0/1"; return 1 ;; esac
 			;;
 		therm_start)
 			# 合理区间 30.0~100.0C
-			[ "$_v" -lt 300 ] && { echo "ERR: 开始降流温度 $_v 低于 30.0℃"; return 1; }
-			[ "$_v" -gt 1000 ] && { echo "ERR: 开始降流温度 $_v 高于 100.0℃（是否误填摄氏度数？）"; return 1; }
+			[ "$_v" -lt 300 ] && { echo "ERR: Throttle start temp $_v below 30.0C"; return 1; }
+			[ "$_v" -gt 1000 ] && { echo "ERR: Throttle start temp $_v above 100.0C (check 0.1C unit)"; return 1; }
 			THERM_START=$_v
 			;;
 		therm_stop)
-			[ "$_v" -lt 300 ] && { echo "ERR: 停止干预温度 $_v 低于 30.0℃"; return 1; }
-			[ "$_v" -gt 1000 ] && { echo "ERR: 停止干预温度 $_v 高于 100.0℃（是否误填摄氏度数？）"; return 1; }
+			[ "$_v" -lt 300 ] && { echo "ERR: Stop temp $_v below 30.0C"; return 1; }
+			[ "$_v" -gt 1000 ] && { echo "ERR: Stop temp $_v above 100.0C (check 0.1C unit)"; return 1; }
 			THERM_STOP=$_v
 			;;
 		safe_en)
-			case "$_v" in 0|1) SAFE_EN=$_v ;; *) echo "ERR: 防掉档开关只能是 0/1"; return 1 ;; esac
+			case "$_v" in 0|1) SAFE_EN=$_v ;; *) echo "ERR: safe_en must be 0/1"; return 1 ;; esac
 			;;
 		safe_cap)
 			# 0 = 反应式（跟随观测掉档，不静态封顶）
 			if [ "$_v" -gt 0 ]; then
-				[ "$_v" -lt 1000 ] && { echo "ERR: 安全上限 $_v 低于 1000mA（会掉进约13W 死区）"; return 1; }
-				[ "$_v" -gt 20000 ] && { echo "ERR: 安全上限 $_v 超过 20000mA，疑似误填"; return 1; }
+				[ "$_v" -lt 1000 ] && { echo "ERR: Safety cap $_v below 1000mA (~13W deadzone)"; return 1; }
+				[ "$_v" -gt 20000 ] && { echo "ERR: Safety cap $_v exceeds 20000mA"; return 1; }
 			fi
 			SAFE_CAP=$_v
 			;;
@@ -5784,15 +5751,15 @@ _cfg_set() {
 			#   语义：SOC 超过这个值后模块不再写节点，把控制权交回系统。
 			#   100 = 一直管到满。
 			[ "$_v" -lt "$SOC_STOP_MIN" ] && {
-				echo "ERR: 停止介入电量 $_v% 低于下限 ${SOC_STOP_MIN}%（再低模块基本不介入）"
+				echo "ERR: Stop SOC $_v% below min ${SOC_STOP_MIN}%"
 				return 1
 			}
 			[ "$_v" -gt "$SOC_STOP_MAX" ] && {
-				echo "ERR: 停止介入电量 $_v% 超过上限 ${SOC_STOP_MAX}%"
+				echo "ERR: Stop SOC $_v% exceeds max ${SOC_STOP_MAX}%"
 				return 1
 			}
 			[ "$_v" -le "$SOC_MIN" ] && {
-				echo "ERR: 停止介入电量 $_v% 必须高于介入下限 ${SOC_MIN}%"
+				echo "ERR: Stop SOC $_v% must exceed start floor ${SOC_MIN}%"
 				return 1
 			}
 			SOC_MAX=$_v
@@ -5801,7 +5768,7 @@ _cfg_set() {
 			# ★ v3515：超频档开关（默认 0）
 			case "$_v" in
 				0|1) ;;
-				*) echo "ERR: 超频档开关只能是 0（关）或 1（开）"; return 1 ;;
+				*) echo "ERR: Overclock switch must be 0 (off) or 1 (on)"; return 1 ;;
 			esac
 
 			# 记录切换前的旧上限，用于判断「段位值是否恰好等于旧上限」
@@ -5842,29 +5809,29 @@ _cfg_set() {
 				[ "$I_LOW2" -gt "$_newcap" ] && I_LOW2="$_newcap"
 				[ "$VOTE_IBAT" -gt "$_newcap" ] && VOTE_IBAT="$_newcap"
 
-				log "超频档切换 CAL_OC=$CAL_OC：上限 $_oldcap -> $_newcap mA，段位与总闸已同步"
+				log "Overclock toggle CAL_OC=$CAL_OC: cap $_oldcap -> $_newcap mA; segments & limit synced"
 			fi
 			;;
 		log_en)
 			# ★ v3517：日志总开关
 			case "$_v" in
 				0|1) LOG_EN=$_v ;;
-				*) echo "ERR: 日志开关只能是 0（关）或 1（开）"; return 1 ;;
+				*) echo "ERR: Log switch must be 0 (off) or 1 (on)"; return 1 ;;
 			esac
 			;;
 		*)
-			echo "ERR: 未知参数 $_k"
+			echo "ERR: Unknown parameter $_k"
 			return 1
 			;;
 	esac
 
 	# 交叉校验：停止温度必须高于开始温度
 	if [ "$THERM_EN" = "1" ] && [ "$THERM_STOP" -le "$THERM_START" ]; then
-		echo "ERR: 停止干预温度(${THERM_STOP}) 必须高于 开始降流温度(${THERM_START})"
+		echo "ERR: Stop temp (${THERM_STOP}) must be higher than throttle start temp (${THERM_START})"
 		return 1
 	fi
 
-	save_profile || { echo "ERR: 写配置失败"; return 1; }
+	save_profile || { echo "ERR: Failed to save profile"; return 1; }
 
 	# ★ v3519：开关类参数（cal_oc / log_en）落盘后立刻同步 status.json。
 	#
@@ -5947,16 +5914,16 @@ set_cal() {
 
 	case "$_seg" in
 		low|mid|peak|mid2|low2) ;;
-		*) echo "ERR: 段名必须是 low|mid|peak|mid2|low2（或对应的高级设置项）"; return 1 ;;
+		*) echo "ERR: Segment must be low|mid|peak|mid2|low2 (or an Advanced key)"; return 1 ;;
 	esac
 
 	local _cap
 	_cap=$(cal_max)
 	case "$_val" in
-		''|*[!0-9]*) echo "ERR: 值必须是非负整数（收到 '$_val'）"; return 1 ;;
+		''|*[!0-9]*) echo "ERR: Value must be a non-negative integer (got '$_val')"; return 1 ;;
 	esac
 	if [ "$_val" -gt "$_cap" ]; then
-		echo "ERR: 值 $_val 超过本机上限 $_cap mA"
+		echo "ERR: Value $_val exceeds device max $_cap mA"
 		return 1
 	fi
 
@@ -5969,21 +5936,21 @@ set_cal() {
 		low2) I_LOW2=$_val ;;
 	esac
 
-	save_profile || { echo "ERR: 写配置失败"; return 1; }
+	save_profile || { echo "ERR: Failed to save profile"; return 1; }
 
 	echo "OK $_seg=$_val"
 	return 0
 }
 
-# ---------------- 入口 ----------------
+# ---------------- Entry point ----------------
 case "$1" in
 	start)
 		if daemon_running; then
-			echo "已在运行 (pid $(cat "$PIDFILE"))"
+			echo "Already running (pid $(cat "$PIDFILE"))"
 			exit 0
 		fi
 		spawn_daemon
-		echo "已启动 (pid $(cat "$PIDFILE"))"
+		echo "Started (pid $(cat "$PIDFILE"))"
 		;;
 	__daemon)
 
@@ -6004,9 +5971,9 @@ case "$1" in
 		#   用户看到的就是"点了恢复原厂却没有任何作用"。
 		if write_profile 3; then
 			ACTIVE=3
-			log "一键恢复原厂：档位已切到原厂(3)，守护与看门狗都会停止干预"
+			log "Restored stock: profile switched to Stock(3); daemon & watchdog will stop"
 		else
-			echo "警告: 档位写盘失败，看门狗可能仍会保活（请到界面手动切到原厂档）"
+			echo "WARN: Failed to write profile; watchdog may respawn (switch to Stock in WebUI)"
 		fi
 
 		# ① 停守护：先发信号等它自己退，超时再兜底清扫，
@@ -6056,11 +6023,11 @@ case "$1" in
 		emit_json > "$_ctr" 2>/dev/null
 		[ -s "$_ctr" ] && mv -f "$_ctr" "$CACHE_FILE" 2>/dev/null || rm -f "$_ctr" 2>/dev/null
 
-		echo "已恢复原厂：档位=原厂(3) + 停守护 + 交回系统 + 撤掉全部压制"
-		echo "方式: ${rwhat:-未知}"
-		echo "当前节点值: $(cat "$NODE" 2>/dev/null)"
-		echo "提示: 档位已停在原厂，重启后也不会再干预。"
-		echo "      只想临时停手、之后还要接着用 -> 用 pause 而不是 restore。"
+		echo "Restored stock: profile=Stock(3) + daemon stopped + handed back + overrides cleared"
+		echo "Method: ${rwhat:-unknown}"
+		echo "Current node value: $(cat "$NODE" 2>/dev/null)"
+		echo "Note: Profile stays at Stock; no intervention after reboot."
+		echo "      To pause temporarily and resume later, use pause instead of restore."
 		;;
 	pause)
 		# 「临时解除加速」——照 120w 模块的 paused 机制。
@@ -6068,44 +6035,51 @@ case "$1" in
 		#   拔掉标记立刻恢复。跨重启有效。
 		#   与 restore 的区别：restore 是彻底停手（写 ACTIVE=3，不再自动回来）。
 		printf '%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" > "$PAUSE_FLAG" 2>/dev/null || {
-			echo "ERR: 无法写入暂停标记 $PAUSE_FLAG"
+			echo "ERR: Failed to write pause flag $PAUSE_FLAG"
 			exit 1
 		}
-		log "用户触发：临时解除加速（等待守护下一轮撤掉干预）"
+		log "User triggered: temporary pause (waiting for daemon to clear controls)"
 
-		# 等守护把注入/属性/场景撤干净（最多 10 秒）
+		# 等守护把注入/节点撤干净（最多 10 秒）
 		_w=0
-		# ★★ v3558：这里原来等的是 USER_IBAT，但注入通道早已改为 DCHG_FCC，
-		#   该节点在本机根本不存在 -> cat 拿到空 -> 立刻 break -> 等于没等。
-		#   改成读实际注入目标（VOTE_TARGETS 里的第一个），找不到就退化成不等待。
-		_PT="$VOT_ROOT/${VOTE_TARGETS%% *}/force_active"
-		while [ "$_w" -lt 10 ]; do
-			_v=$(cat "$_PT" 2>/dev/null)
-			case "$_v" in ''|1) ;; *) break ;; esac
-			sleep 1
-			_w=$((_w + 1))
-		done
-		if daemon_running; then
-			echo "已临时解除加速：守护已撤掉干预并转入空转（进程保留，随时可恢复）"
+		votable_ready >/dev/null 2>&1
+		if [ "$VOT_BACKEND" = "sysfs" ] || [ ! -d "$VOT_ROOT/${VOTE_TARGETS%% *}" ]; then
+			while [ "$_w" -lt 10 ]; do
+				_v=$(cat "$NODE" 2>/dev/null)
+				case "$_v" in ''|0) break ;; esac
+				sleep 1
+				_w=$((_w + 1))
+			done
 		else
-			echo "已临时解除加速：标记已写入（守护当前未运行；启动后会自动保持解除）"
+			_PT="$VOT_ROOT/${VOTE_TARGETS%% *}/force_active"
+			while [ "$_w" -lt 10 ]; do
+				_v=$(cat "$_PT" 2>/dev/null)
+				case "$_v" in ''|1) ;; *) break ;; esac
+				sleep 1
+				_w=$((_w + 1))
+			done
+		fi
+		if daemon_running; then
+			echo "Boost paused: daemon cleared controls and is idling (process kept)"
+		else
+			echo "Boost paused: flag written (daemon not running; stays paused on start)"
 		fi
 		# ★★ v3558：立即刷新 status.json。守护的 refresh_cache 空闲态是 30 秒一次，
 		#   不主动刷的话，WebUI 里 paused 会滞后 20~30 秒才变 true（实测）。
 		refresh_cache >/dev/null 2>&1
-		echo "恢复: $0 resume"
+		echo "Resume: $0 resume"
 		;;
 	resume)
 		rm -f "$PAUSE_FLAG" 2>/dev/null
-		log "用户触发：恢复加速（已清除临时解除标记）"
+		log "User triggered: boost resumed (pause flag cleared)"
 		# ★★ v3558：同 pause，立即刷新 status.json，否则 paused 会滞后 20~30 秒。
 		refresh_cache >/dev/null 2>&1
 		# 沿用统一的启动路径（含存活判定与实例清扫）
 		if daemon_running; then
-			echo "已恢复加速：守护仍在运行，下一轮（约 2 秒）即重新生效"
+			echo "Boost resumed: daemon running, re-engaging within ~2s"
 		else
 			spawn_daemon
-			echo "已恢复加速：守护已拉起"
+			echo "Boost resumed: daemon started"
 		fi
 		;;
 	stop)
@@ -6133,17 +6107,17 @@ case "$1" in
 			VOT_SWEEP_ALL=1
 			rwhat=$(restore_to_system)
 			VOT_SWEEP_ALL=0
-			echo "已停止干预，交回系统。方式: ${rwhat:-未知}"
-			echo "当前节点值: $(cat "$NODE" 2>/dev/null)"
-			echo "提示: 节点是只进不出的，不显式交还的话会一直生效。"
+			echo "Intervention stopped, handed back to stock. Method: ${rwhat:-unknown}"
+			echo "Current node value: $(cat "$NODE" 2>/dev/null)"
+			echo "Note: Node value latches until explicitly restored."
 		else
 
-			echo "未在运行（仍执行一次交回，确保节点不残留干预值）"
+			echo "Not running (performing handback anyway to clear any leftover override)"
 			VOT_SWEEP_ALL=1
 			rwhat=$(restore_to_system)
 			VOT_SWEEP_ALL=0
-			echo "交回系统。方式: ${rwhat:-未知}"
-			echo "当前节点值: $(cat "$NODE" 2>/dev/null)"
+			echo "Handed back to stock. Method: ${rwhat:-unknown}"
+			echo "Current node value: $(cat "$NODE" 2>/dev/null)"
 		fi
 		;;
 	profile)
@@ -6160,8 +6134,8 @@ case "$1" in
 			write)
 				if write_profile "$3"; then
 					load_profile
-					echo "已切换到: $PROFILE_NAME 档"
-					echo "配置文件: $PROFILE_FILE"
+					echo "Switched to: $PROFILE_NAME profile"
+					echo "Config file: $PROFILE_FILE"
 					echo "  I_LOW  = $I_LOW    (${SOC_MIN}~${SOC_T1}%)"
 					echo "  I_MID  = $I_MID    (${SOC_T1}~${SOC_T2}%)"
 					echo "  I_PEAK=$I_PEAK   (${SOC_T2}~${SOC_T3}%)"
@@ -6169,10 +6143,10 @@ case "$1" in
 					echo "  I_LOW2=$I_LOW2   (${SOC_T4}~${SOC_MAX}%)"
 
 					if [ "$3" = "3" ]; then
-						echo "守护进程已停止干预（交回系统自管）"
-						echo "  节点复位方式: ${rwhat:-未知}"
-						echo "  ★ 若显示「申请额度」字样，说明模块没拿到干预前的原值备份，"
-						echo "    写回的是 DT 表的额度上限（合法但偏激进），不是出厂原值。"
+						echo "Daemon intervention stopped (handed back to stock)"
+						echo "  Node reset method: ${rwhat:-unknown}"
+						echo "  * If shown as requested limit, no pre-intervention backup existed;"
+						echo "    DT table limit was written instead (valid, not factory idle)."
 					else
 						# ★★ v3560 修复：切回 1/2 档时必须【主动拉起守护】★★
 						# 【原缺陷（实测）】write_profile 只写文件，从不启动进程，
@@ -6187,10 +6161,10 @@ case "$1" in
 						#   所以这一步通常已经为真。这里只是把结论如实报出来，
 						#   不再像旧版那样无条件打印"将在 2 秒内热重载"。
 						if daemon_running; then
-							echo "守护进程运行中，将在 2 秒内热重载（PID 不变）"
+							echo "Daemon running; hot-reloading within 2s (same PID)"
 						else
-							echo "警告: 守护进程未能拉起，请把本条输出反馈到模块发布页"
-							echo "  可手动执行: $0 start"
+							echo "WARN: Failed to launch daemon; please report this output"
+							echo "  Run manually: $0 start"
 						fi
 						
 						# ★★ v3560 修复：切回 1/2 档时【叫醒看门狗】★★
@@ -6217,90 +6191,90 @@ case "$1" in
 								[ -f "$_wd" ] || _wd="${0%/*}/service.sh"
 								if [ -f "$_wd" ]; then
 									nohup /system/bin/sh "$_wd" >/dev/null 2>&1 &
-									echo "已唤醒看门狗（service.sh），后续守护异常退出会自动保活"
+									echo "Watchdog (service.sh) woken up for auto-restart on unexpected exit"
 								fi
 							fi
 					fi
 				else
-					echo "用法: $0 profile write 1|2|3"
+					echo "Usage: $0 profile write 1|2|3"
 					exit 1
 				fi
 				;;
 			*)
 				load_profile
-				echo "=== 档位状态 ==="
-				echo "配置文件: $PROFILE_FILE"
+				echo "=== Profile Status ==="
+				echo "Config file: $PROFILE_FILE"
 				if [ -f "$PROFILE_FILE" ]; then
-					echo "           (存在)"
+					echo "             (exists)"
 				else
-					echo "           (不存在，使用内置默认)"
+					echo "             (missing, using built-in defaults)"
 				fi
-				echo "当前档位: $ACTIVE ($PROFILE_NAME)"
+				echo "Active profile: $ACTIVE ($PROFILE_NAME)"
 				echo ""
-				echo "SOC 段        申请值      说明"
-				echo "  ${SOC_MIN}~${SOC_T1}%    $I_LOW mA   低 SOC 段"
+				echo "SOC Range     Request     Note"
+				echo "  ${SOC_MIN}~${SOC_T1}%    $I_LOW mA   Low SOC"
 				echo "  ${SOC_T1}~${SOC_T2}%    $I_MID mA"
 				echo "  ${SOC_T2}~${SOC_T3}%    $I_PEAK mA"
 				echo "  ${SOC_T3}~${SOC_T4}%    $I_MID2 mA"
 				echo "  ${SOC_T4}~${SOC_MAX}%    $I_LOW2 mA"
 				echo ""
-				echo "可用档位:"
-				echo "  1 = 激进档（正常写入，档内不预降）"
-				echo "  2 = 温和档（同样申请 ${I_LOW}mA，热保护更保守）"
-				echo "  3 = 原厂档（停止干预，交还系统自管）"
+				echo "Available profiles:"
+				echo "  1 = Aggressive (active writes, no SOC step-down)"
+				echo "  2 = Balanced   (same ${I_LOW}mA request, stricter thermal limits)"
+				echo "  3 = Stock      (stop intervention, hand back to stock)"
 				echo ""
-				echo "切换: $0 profile write 1|2|3"
+				echo "Switch: $0 profile write 1|2|3"
 				;;
 		esac
 		;;
 	status)
-		echo "=== vivo 充电加速模块 v3.5.11 ==="
+		echo "=== vivo V2507A Charge Boost Module v3578 ==="
 		load_profile
 		SOC=$(read_soc); TEMP=$(read_temp); V=$(read_vbat); I=$(read_ibat "$V")
 		TBD=$(read_temp_desc)
-		echo "控制节点: $NODE"
-		echo "当前档位: $ACTIVE ($PROFILE_NAME)"
-		echo "SOC     : ${SOC}%"
-		echo "温度    : ${TBD}"
-		echo "          热保护输入=min(板级,电池) 档位判定用两路各自查表取更保守"
-		echo "热保护  : 板级 预警$(f10 $TB_WARN) 降A$(f10 $TB_CAP_A)(≤${CAP_A}) 降B$(f10 $TB_CAP_B)(≤${CAP_B}) 撒手$(f10 $TB_RELEASE)"
-		echo "          电池 预警$(f10 $TC_WARN) 降A$(f10 $TC_CAP_A)(≤${CAP_A}) 降B$(f10 $TC_CAP_B)(≤${CAP_B}) 撒手$(f10 $TC_RELEASE)"
-		echo "          恢复 板级≤$(f10 $TB_RECOVER)/电池≤$(f10 $TC_RECOVER) 持续 ${TEMP_RECOVER_SEC}s，温度取 ${TEMP_HIST_N} 点中位"
+		echo "Control node: $NODE"
+		echo "Profile     : $ACTIVE ($PROFILE_NAME)"
+		echo "SOC         : ${SOC}%"
+		echo "Temp        : ${TBD}"
+		echo "              Thermal input = min(board, batt); picks stricter tier across both"
+		echo "Thermal cfg : Board warn$(f10 $TB_WARN) capA$(f10 $TB_CAP_A)(<=${CAP_A}) capB$(f10 $TB_CAP_B)(<=${CAP_B}) rel$(f10 $TB_RELEASE)"
+		echo "              Batt  warn$(f10 $TC_WARN) capA$(f10 $TC_CAP_A)(<=${CAP_A}) capB$(f10 $TC_CAP_B)(<=${CAP_B}) rel$(f10 $TC_RELEASE)"
+		echo "              Recover Board<=$(f10 $TB_RECOVER)/Batt<=$(f10 $TC_RECOVER) for ${TEMP_RECOVER_SEC}s (${TEMP_HIST_N}-pt median)"
 
 		case "$I" in
-			-*) echo "电池电流: +${I#-} uA（正=充电 负=放电）" ;;
-			''|*[!0-9]*) echo "电池电流: 读取失败" ;;
-			0) echo "电池电流: 0 uA" ;;
-			*) echo "电池电流: -${I} uA（正=充电 负=放电）" ;;
+			-*) echo "Batt current: +${I#-} uA (+ charge / - discharge)" ;;
+			''|*[!0-9]*) echo "Batt current: read failed" ;;
+			0) echo "Batt current: 0 uA" ;;
+			*) echo "Batt current: -${I} uA (+ charge / - discharge)" ;;
 		esac
-		echo "电池电压: ${V} uV"
+		echo "Batt voltage: ${V} uV"
 		_pw=$(read_input_power)
 		if [ -n "$_pw" ]; then
 			set -- $_pw
 
-			echo "输入电压: ${1} mV"
-			echo "输入电流: ${2} mA"
-			echo "输入功率: $(( $3 / 1000 )).$(( ($3 % 1000) / 100 )) W   <-- 模块是否生效看这里"
+			echo "Input volt  : ${1} mV"
+			echo "Input curr  : ${2} mA"
+			echo "Input power : $(( $3 / 1000 )).$(( ($3 % 1000) / 100 )) W   <-- Check module effect here"
 		fi
-		echo "节点当前: $(cat "$NODE" 2>/dev/null)"
+		echo "Node value  : $(cat "$NODE" 2>/dev/null)"
 		if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-			echo "运行状态: 运行中 (pid $(cat "$PIDFILE"))"
+			echo "Status      : Running (pid $(cat "$PIDFILE"))"
 		else
-			echo "运行状态: 未运行"
+			echo "Status      : Not running"
 		fi
 		;;
 	power)
 
-		echo "采样 12 次（每次 2 秒），观察功率:"
+		echo "Sampling 12x (every 2s), watch power:"
 		i=1
 		while [ $i -le 12 ]; do
 			_pw=$(read_input_power)
 			if [ -n "$_pw" ]; then
 				set -- $_pw
-				printf "  [%2d] %d mV x %d mA = %d.%d W  (节点=%s)\n" \
+				printf "  [%2d] %d mV x %d mA = %d.%d W  (node=%s)\n" \
 					"$i" "$(( $1 / 1000 ))" "$(( $2 / 1000 ))" "$(( $3 / 1000 ))" "$(( ($3 % 1000) / 100 ))" "$(cat "$NODE" 2>/dev/null)"
 			else
-				printf "  [%2d] 读不到功率\n" "$i"
+				printf "  [%2d] Power unreadable\n" "$i"
 			fi
 			i=$((i + 1))
 			sleep 2
@@ -6314,166 +6288,143 @@ case "$1" in
 		;;
 	table)
 		load_profile
-		echo "控制节点: $NODE"
-		echo "          (vfcs_class/fchg_fcc_ma —— vivo 快充正式接口)"
+		echo "Control node: $NODE"
+		echo "              (vfcs_class/fchg_fcc_ma — vivo official fast-charge interface)"
 
 		_tsrc=$(read_temp_source)
-		echo "温度源  : $(_tname_of "$_tsrc") + 电池 battery/temp"
-		echo "          两路各自查表，取更保守的档位（谁先报警听谁的）"
-		echo "当前档位: $ACTIVE ($PROFILE_NAME)"
+		echo "Temp source : $(_tname_of "$_tsrc") + Batt battery/temp"
+		echo "              Both channels evaluated; picks stricter tier"
+		echo "Profile     : $ACTIVE ($PROFILE_NAME)"
 		echo ""
-		echo "SOC 加速表 (板级温度 ${TEMP_MIN}/10~$((${TEMP_RELEASE}/10)).$((TEMP_RELEASE%10))C 生效, 纯 SOC 决策):"
-		echo "  SOC 段        申请值      实测功率（按工况）"
-		printf "  %-12s  %-9s  按本段申请值\n" \
+		echo "SOC Boost Table (active at board temp ${TEMP_MIN}/10~$((${TEMP_RELEASE}/10)).$((TEMP_RELEASE%10))C, pure SOC):"
+		echo "  SOC Range     Request     Actual power (by condition)"
+		printf "  %-12s  %-9s  Requested per this segment\n" \
 			"${SOC_MIN}~${SOC_T1}%" "$I_LOW"
-		printf "  %-12s  %-9s  实际功率由系统裁定\n" \
+		printf "  %-12s  %-9s  Actual power arbitrated by stock\n" \
 			"${SOC_T1}~${SOC_T2}%" "$I_MID"
 		printf "  %-12s  %-9s\n" "${SOC_T2}~${SOC_T3}%" "$I_PEAK"
 		printf "  %-12s  %-9s\n" "${SOC_T3}~${SOC_T4}%" "$I_MID2"
 		printf "  %-12s  %-9s\n" "${SOC_T4}~${SOC_MAX}%" "$I_LOW2"
-		printf "  %-12s  %-9s\n" "${SOC_MAX}%以上" "不动（交回系统）"
+		printf "  %-12s  %-9s\n" "Above ${SOC_MAX}%" "Idle (handed back to stock)"
 		echo ""
-		echo "热保护阶梯（两路独立，取更保守的档位）："
-		echo "  档位      板级温度     电池温度     动作"
-		printf "  正常      < %sC     < %sC    按上表申请\n" "$(f10 "$TB_WARN")" "$(f10 "$TC_WARN")"
-		printf "  预警     >= %sC    >= %sC    SOC 表退一档\n" "$(f10 "$TB_WARN")" "$(f10 "$TC_WARN")"
-		printf "  降档A    >= %sC    >= %sC    封顶 %d\n" "$(f10 "$TB_CAP_A")" "$(f10 "$TC_CAP_A")" "$CAP_A"
-		printf "  降档B    >= %sC    >= %sC    封顶 %d\n" "$(f10 "$TB_CAP_B")" "$(f10 "$TC_CAP_B")" "$CAP_B"
-		printf "  撒手     >= %sC    >= %sC    停止写节点，交回系统\n" "$(f10 "$TB_RELEASE")" "$(f10 "$TC_RELEASE")"
-		printf "  恢复     <= %sC    <= %sC    两路都满足且持续 %d 秒\n" "$(f10 "$TB_RECOVER")" "$(f10 "$TC_RECOVER")" "$TEMP_RECOVER_SEC"
+		echo "Thermal Ladder (dual independent channels, stricter wins):"
+		echo "  Tier      Board Temp   Batt Temp    Action"
+		printf "  Normal    < %sC     < %sC    Use table above\n" "$(f10 "$TB_WARN")" "$(f10 "$TC_WARN")"
+		printf "  Warn     >= %sC    >= %sC    Step down one SOC tier\n" "$(f10 "$TB_WARN")" "$(f10 "$TC_WARN")"
+		printf "  Step A   >= %sC    >= %sC    Cap %d\n" "$(f10 "$TB_CAP_A")" "$(f10 "$TC_CAP_A")" "$CAP_A"
+		printf "  Step B   >= %sC    >= %sC    Cap %d\n" "$(f10 "$TB_CAP_B")" "$(f10 "$TC_CAP_B")" "$CAP_B"
+		printf "  Release  >= %sC    >= %sC    Stop writes, hand back\n" "$(f10 "$TB_RELEASE")" "$(f10 "$TC_RELEASE")"
+		printf "  Recover  <= %sC    <= %sC    Both hold for %ds\n" "$(f10 "$TB_RECOVER")" "$(f10 "$TC_RECOVER")" "$TEMP_RECOVER_SEC"
 		echo ""
-		echo "  板级：防内核在 80.0C 硬切快充（触到即 fchg_disable，功率断崖）"
-		echo "  电池：防电芯本身过热（析锂/鼓包）"
+		echo "  Board: prevents kernel hard cutoff at 80.0C (fchg_disable drops power)"
+		echo "  Batt : protects cell from overheating (plating/swelling)"
 		echo ""
-		echo "=== 档位说明 ==="
-		echo "  激进/温和/原厂 三档的电流值相同（统一 ${I_LOW}mA），"
-		echo "  区别在于是否干预与写入时机；原厂档停止干预、交还系统自管。"
+		echo "=== Profile Notes ==="
+		echo "  Aggressive/Balanced/Stock share target values (uniform ${I_LOW}mA);"
+		echo "  they differ by active intervention vs handing back to stock."
 		echo ""
-		echo "★ 热保护状态机 (v2.8 双源) ★"
-		echo "  两路温度各自查表，取更保守的档位："
-		echo "  档位      板级温度    电池温度    动作"
-		echo "  正常      <65.0C     <40.5C     按 SOC 表申请"
-		echo "  预警      65~70C     40.5~41C   SOC 表整体退一档"
-		echo "  降档A     ≥70.0C     ≥41.0C     封顶 ${CAP_A}"
-		echo "  降档B     ≥75.0C     ≥42.0C     封顶 ${CAP_B}"
-		echo "  撒手      ≥79.0C     ≥43.0C     停止写节点，交回系统"
-		echo "  恢复      ≤60.0C     ≤39.0C     两路都满足持续 ${TEMP_RECOVER_SEC}s"
+		echo "* Thermal State Machine (v2.8 Dual-Source) *"
+		echo "  Both temp sources checked independently; stricter tier applies:"
+		echo "  Tier      Board(current)     Batt        Action"
+		echo "  Normal    <$(f10 "$TB_WARN")C          <$(f10 "$TC_WARN")C     SOC/limit rules"
+		echo "  Warn      >=$(f10 "$TB_WARN")C         >=$(f10 "$TC_WARN")C    Step down 1 SOC tier"
+		echo "  Step A    >=$(f10 "$TB_CAP_A")C         >=$(f10 "$TC_CAP_A")C    Cap ${CAP_A}"
+		echo "  Step B    >=$(f10 "$TB_CAP_B")C         >=$(f10 "$TC_CAP_B")C    Cap ${CAP_B}"
+		echo "  Release   >=$(f10 "$TB_RELEASE")C         >=$(f10 "$TC_RELEASE")C    Stop writes (0 -> stock)"
+		echo "  Recover   <=$(f10 "$TB_RECOVER")C         <=$(f10 "$TC_RECOVER")C    Both hold ${TEMP_RECOVER_SEC}s"
 		echo ""
-		echo "  运行时读数: $(read_temp_desc)"
-		echo "  板级硬门限: 80.0C（内核 fchg_disable，功率断崖，非协商）"
+		echo "  Live reading : $(read_temp_desc)"
+		echo "  Debounce     : Median of last ${TEMP_HIST_N} samples (+/-0.6C jitter filter)"
 		echo ""
-		echo "  规则: 实际写入 = min(温度处理后的值, 温度封顶值)"
-		echo "        → 温度只允许让申请值变小，绝不因温度而升档"
+		echo "  Rule: write = min(thermal-adjusted seg, total limit x derate, thermal cap)"
+		echo "        -> thermal only reduces current, never steps up"
 		echo ""
-		echo "  防抖: 温度取近 ${TEMP_HIST_N} 次中位数（抗 ±0.6C 毛刺）"
-		echo "        恢复需 ≤60.0C 且持续 ${TEMP_RECOVER_SEC}s（防边界开合）"
+		echo "  Switch via: KernelSU Action button + volume keys,"
+		echo "              or run $0 profile write 1|2|3"
 		echo ""
-		echo "  切换方式: KernelSU 里按 Action 按钮，用音量键选择"
-		echo "            或执行 $0 profile write 1|2|3"
-		echo ""
-		echo "★★ 为什么按 SOC 段取不同值 ★★"
-		echo "  同一节点值，功率随 SOC 变化 13W 以上："
-		echo "    11720 -> SOC50% 时 52W / SOC65% 时 39W"
-		echo "  fchg_fcc_ma 是【申请额度】，最终给多少由 SOC 二次裁定。"
-		echo "  SOC 越低，系统越愿意接受大额度。"
-		echo ""
-		echo "★ 实测响应曲线（2026-09-26 复测，SOC 40~46%）:"
-		echo "    节点=0     -> 13W   (灾难，等同不充电)"
-		echo "    节点=3000  -> 13W   (死区)"
-		echo "    节点=4765  -> 18.5W"
-		echo "    节点=5765  -> 22.8W"
-		echo "    节点=7720  -> 31.5W"
-		echo "    节点=9720  -> 40.7W (效率最高档 96.2%)"
-		echo "    节点=11720 -> 46.4W <-- 此段峰值"
-		echo "    节点=15600 -> 41.1W (申请超额但被系统二次裁定)"
-		echo ""
-		echo "  ★ 关键发现：功率在 SOC 40~46% 段由 SOC 主导，"
-		echo "    节点申请值只在【电流台阶】之间跳跃："
-		echo "      4765 / 5765 / 7720 / 9720 / 11720 / 15600 mA"
-		echo "    所以封顶值要选在台阶上，落在台阶之间等于没降。"
-		echo ""
-		echo "电压: 不参与决策, 完全交给系统/IC 自管"
-		echo "      实测电压随节点值变动 8.5V -> 9.5V，上限 9.5V"
-		echo ""
-		echo "限制: 本机 90W 需 11V x 8.2A，但档位只到 9.5V，"
-		echo "      故 90W 拿不到。9V 档实测 20W(保底)~53W(低SOC)。"
+		echo "** V2507A Native Hardware Specs **"
+		echo "  1. Control node: vfcs_class/fchg_fcc_ma (maps to DCHG_FCC / VFCS_CLASS_EVENT)"
+		echo "     Write !=0 = force DCHG_FCC override (bypasses USER_FCC_EVENT thermal/FBON);"
+		echo "     Write 0   = release override, hand back to vivo stock scheduler."
+		echo "  2. DT ladder : ${VALID_CURRENTS} mA (caps align cleanly to these steps)"
+		echo "  3. Safety    : Kernel callbacks & adapter PDO still cap at hardware max (15600mA)."
 		;;
 	factory)
 
 		case "$2" in
 			raw)
 
-				echo "=== DT 节点（v3.0 跨平台探测）==="
+				echo "=== DT Node (v3.0 cross-platform probe) ==="
 				dt_probe $(read_aging_stage) >/dev/null 2>&1
 				_pv_ok=0
 				[ -n "$DT_TC_NODE" ] && [ -r "$DT_TC_NODE" ] && _pv_ok=1
-				echo "平台判定:      ${DT_PLATFORM:-未探测}"
-				echo "命中方式:      ${DT_PROBE_HOW:-（无）}"
-				echo "老化档:        $(read_aging_stage)"
-				echo "路径:          ${DT_TC_NODE:-（探测失败）}"
+				echo "Platform     : ${DT_PLATFORM:-not probed}"
+				echo "Match method : ${DT_PROBE_HOW:-(none)}"
+				echo "Aging stage  : $(read_aging_stage)"
+				echo "Path         : ${DT_TC_NODE:-(probe failed)}"
 				if [ "$_pv_ok" = "1" ]; then
-					echo "电压单位:      $(dt_detect_unit "$DT_TC_NODE")"
-					echo "分段边界(自动): $(dt_auto_segs "$DT_TC_NODE" 2>/dev/null || echo '（失败，用兜底）')"
+					echo "Voltage unit : $(dt_detect_unit "$DT_TC_NODE")"
+					echo "Seg bounds   : $(dt_auto_segs "$DT_TC_NODE" 2>/dev/null || echo '(failed, using fallback)')"
 				fi
 				echo ""
 				if [ "$_pv_ok" = "1" ]; then
-					echo "可读: 是"
-					echo "大小: $(wc -c < "$DT_TC_NODE" 2>/dev/null) 字节"
+					echo "Readable: Yes"
+					echo "Size    : $(wc -c < "$DT_TC_NODE" 2>/dev/null) bytes"
 					echo ""
 
 					_n=$(wc -c < "$DT_TC_NODE" 2>/dev/null)
 					case "$_n" in ''|*[!0-9]*) _n=0 ;; esac
 					_uc=$((_n / 4))
-					echo "=== 全部 $_uc 个 uint32 (big-endian) ==="
+					echo "=== All $_uc uint32s (big-endian) ==="
 					i=0
 					while [ "$i" -lt "$_uc" ]; do
 						printf "  [%3d] %s\n" "$i" "$(dt_u32_at "$DT_TC_NODE" "$i")"
 						i=$((i + 1))
 					done
 					echo ""
-					echo "=== 档位解析（表头 11 起，每 11 个一档）==="
+					echo "=== Tier decode (header 11, stride 11) ==="
 					i=$DT_HDR_LEN
 					_rn=0
 					while [ "$i" -lt "$_uc" ]; do
 						_lo=$(dt_u32_at "$DT_TC_NODE" "$i")
 						_hi=$(dt_u32_at "$DT_TC_NODE" $((i + 1)))
 						[ "$_lo" = "$DT_MAGIC" ] && {
-							echo "  档$((_rn+1)): idx $_i 哨兵档 [0xFFFFDD48]"
+							echo "  Row $((_rn+1)): idx $_i sentinel [0xFFFFDD48]"
 							break
 						}
 						if dt_is_soc_bound "$_lo" "$_hi"; then
-							printf "  档%d: idx %3d  SOC %s-%s  I1=%s V1=%s\n" \
+							printf "  Row %d: idx %3d  SOC %s-%s  I1=%s V1=%s\n" \
 								"$((_rn+1))" "$i" "$_lo" "$_hi" \
 								"$(dt_u32_at "$DT_TC_NODE" $((i + 2)))" \
 								"$(dt_u32_at "$DT_TC_NODE" $((i + 3)))"
 							_rn=$((_rn + 1))
 						else
-							printf "  档%d: idx %3d  (%s,%s) 不是白名单边界\n" \
+							printf "  Row %d: idx %3d  (%s,%s) not whitelisted\n" \
 								"$((_rn+1))" "$i" "$_lo" "$_hi"
 						fi
 						i=$((i + DT_HDR_LEN))
 					done
-					echo "  => 解析出 $_rn 个合法 SOC 档（判据要求 >= $DT_MIN_ROWS）"
+					echo "  => Decoded $_rn valid SOC rows (requires >= $DT_MIN_ROWS)"
 					echo ""
-					echo "SOC 200~249 档 (白名单定位，5 段 I/V):"
+					echo "SOC 200~249 tier (whitelisted, 5 I/V segments):"
 					i=0
 					while [ "$i" -lt 5 ]; do
-						printf "  段%d: I=%s(raw)  V=%s(raw)\n" "$((i + 1))" \
+						printf "  Seg %d: I=%s(raw)  V=%s(raw)\n" "$((i + 1))" \
 							"$(dt_seg_field "$DT_TC_NODE" 200 $((i * 2)))" \
 							"$(dt_seg_field "$DT_TC_NODE" 200 $((i * 2 + 1)))"
 						i=$((i + 1))
 					done
 					echo ""
-					echo "★ 建议恢复值: $(dt_restore_value $(read_aging_stage))"
+					echo "* Recommended restore value: $(dt_restore_value $(read_aging_stage))"
 				else
-					echo "可读: 否"
+					echo "Readable: No"
 					echo ""
-					echo "排查提示："
-					echo "  1) 候选目录是否存在："
+					echo "Diagnostics:"
+					echo "  1) Candidate dirs:"
 					for _d in $(dt_candidate_dirs); do
-						[ -d "$_d" ] && echo "       [有] $_d" || echo "       [无] $_d"
+						[ -d "$_d" ] && echo "       [OK] $_d" || echo "       [--] $_d"
 					done
-					echo "  2) 目录里实际有哪些表："
+					echo "  2) Actual tables found:"
 					for _d in $(dt_candidate_dirs); do
 						[ -d "$_d" ] || continue
 						ls "$_d" 2>/dev/null | grep -i tc-data | head -20 | \
@@ -6482,59 +6433,60 @@ case "$1" in
 				fi
 				;;
 			*)
-				echo "=== 原厂档来源（v3.2.8: 原值备份优先，DT 表为次选）==="
-				echo "平台判定:      ${DT_PLATFORM:-未探测}"
-				echo "老化档:        $(read_aging_stage)"
+				DT_PROBED=""; DT_TABLE_STATE=""; DT_TABLE=""
+				dt_ensure >/dev/null 2>&1
+				echo "=== Stock Profile Source (v3.2.8: backup first, DT table fallback) ==="
+				echo "Platform     : ${DT_PLATFORM:-not probed}"
+				echo "Aging stage  : $(read_aging_stage)"
 
 				_orig=$(read_original)
 				if [ -n "$_orig" ]; then
-					echo "原值备份:      有 -> ${_orig} mA  ($ORIG_FILE)"
-					echo "               ★ 切原厂档时将写回此值（这才是出厂原值）"
+					echo "Orig backup  : Yes -> ${_orig} mA  ($ORIG_FILE)"
+					echo "               * Will write back this original value when switching to Stock"
 				else
-					echo "原值备份:      无"
-					echo "               ⚠ 模块启动时没来得及备份节点原值，"
-					echo "                 切原厂档只能退回 DT 表【申请额度】。"
+					echo "Orig backup  : None"
+					echo "               ! Original node value was not backed up at start;"
+					echo "                 switching to Stock falls back to DT [request limit]."
 				fi
 				echo ""
-				DT_PROBED=""; DT_TABLE_STATE=""; DT_TABLE=""
-				if dt_ensure 2>/dev/null; then
-					echo "表路径:        $DT_TC_NODE"
-					echo "电压单位:      $(dt_detect_unit "$DT_TC_NODE")"
-					echo "分段边界:      ${BASELINE_SEGS_AUTO:-未读取}"
+				if [ -n "$DT_TABLE" ] || dt_ensure 2>/dev/null; then
+					echo "Table path   : $DT_TC_NODE"
+					echo "Voltage unit : $(dt_detect_unit "$DT_TC_NODE")"
+					echo "Seg bounds   : ${BASELINE_SEGS_AUTO:-unreadable}"
 					case "$DT_PROBE_HOW" in
 						exact)
-							echo "命中方式:      精确命中本老化档" ;;
+							echo "Match method : Exact match for aging stage" ;;
 						fallback0)
-							echo "命中方式:      ⚠ 退回未老化档(-0)"
-							echo "              （本老化档的表在本机不存在，恢复值为未老化口径）" ;;
+							echo "Match method : ! Fallback to unaged table (-0)"
+							echo "               (stage table missing; using stage-0 values)" ;;
 						scanall)
-							echo "命中方式:      ⚠ 全盘搜到（非标准路径）" ;;
+							echo "Match method : ! Full scan match (non-standard path)" ;;
 						*)
-							echo "命中方式:      ${DT_PROBE_HOW:-未知}" ;;
+							echo "Match method : ${DT_PROBE_HOW:-unknown}" ;;
 					esac
 					echo ""
-					echo "读取状态: 成功"
+					echo "Read status  : OK"
 					echo ""
-					echo "★ 下表是【申请额度】，不是原厂实际电流。"
-					echo "  fchg_fcc_ma 只负责申请，最终给多少由 SOC/温度二次裁定。"
+					echo "* Table below shows [request limit], not actual stock current."
+					echo "  fchg_fcc_ma only sets request; SOC/temp arbitrate final current."
 					echo ""
-					echo "vbat 区间(mV)      段名    额度(mA)"
+					echo "vbat range(mV)     Seg     Limit(mA)"
 					for e in $DT_TABLE; do
 						name=${e%%=*}; body=${e#*=}
 						icur=${body%%:*}; ivol=${body##*:}
 						printf "  %-18s %-6s  %s\n" ">=$ivol" "$name" "$icur"
 					done
 					echo ""
-					echo "全局上限(vfcs/fchg-curr-max-ma): $(dt_cur_max) mA"
-					echo "（所有取值都会被钳制到此上限）"
-					echo "★ DT 额度参考值(老化档 $(read_aging_stage)): $(dt_restore_value $(read_aging_stage))"
-					echo "★ 本机兜底常量 restore_ma: $(restore_ma)"
+					echo "Global cap (vfcs/fchg-curr-max-ma): $(dt_cur_max) mA"
+					echo "(all values clamped to this cap)"
+					echo "* DT limit ref (stage $(read_aging_stage)): $(dt_restore_value $(read_aging_stage))"
+					echo "* Fallback const restore_ma: $(restore_ma)"
 				else
-					echo "读取状态: 失败"
-					echo "原厂档将退回: ORIG_FILE(节点原值) -> restore_ma($(restore_ma))"
+					echo "Read status  : Failed"
+					echo "Stock fallback: ORIG_FILE(node orig) -> restore_ma($(restore_ma))"
 				fi
 				echo ""
-				echo "用法: $0 factory [raw]"
+				echo "Usage: $0 factory [raw]"
 				;;
 		esac
 		;;
@@ -6580,15 +6532,15 @@ case "$1" in
 		# ============================================================
 		case "$2" in
 			0|1) ;;
-			*) echo "ERR: 超频档开关只能是 0（关）或 1（开）"; exit 1 ;;
+			*) echo "ERR: Overclock switch must be 0 (off) or 1 (on)"; exit 1 ;;
 		esac
 
-		load_profile           # 先把当前配置完整载入（含 CAL_OC）
+		load_profile           # Load full current profile first (incl. CAL_OC)
 		_oldcap=$(cal_max 2>/dev/null)
 		case "$_oldcap" in ''|*[!0-9]*) _oldcap=0 ;; esac
 
 		CAL_OC="$2"
-		cal_max_refresh        # 让 cal_max() 立刻反映新开关
+		cal_max_refresh        # Refresh cal_max() for new switch
 
 		_newcap=$(cal_max 2>/dev/null)
 		case "$_newcap" in ''|*[!0-9]*) _newcap=0 ;; esac
@@ -6614,9 +6566,9 @@ case "$1" in
 		fi
 
 		# 落盘：走 save_profile（它写全量字段，含 CAL_OC / I_* / VOTE_IBAT）
-		save_profile || { echo "ERR: 写配置失败"; exit 1; }
+		save_profile || { echo "ERR: Failed to save profile"; exit 1; }
 
-		log "超频档 CAL_OC=$CAL_OC：上限 ${_oldcap} -> ${_newcap} mA，段位已同步"
+		log "Overclock CAL_OC=$CAL_OC: cap ${_oldcap} -> ${_newcap} mA; segments synced"
 
 		# 输出新状态，前端可直接用于点亮界面，不必再等一次 getjson
 		# ★ v3518：直接把新值写进 status.json，消除「弹回」的观感
@@ -6665,15 +6617,15 @@ case "$1" in
 		;;
 	cells)
 
-		echo "电芯数: $(read_cells)"
+		echo "Cell count: $(read_cells)"
 		echo "  battery/voltage_now = $(cat /sys/class/power_supply/battery/voltage_now 2>/dev/null)"
 		echo "  cms_class/cell1_voltage = $(cat /sys/class/cms_class/cell1_voltage 2>/dev/null)"
 		echo "  cms_class/cell2_voltage = $(cat /sys/class/cms_class/cell2_voltage 2>/dev/null)"
-		echo "  read_vbat (总压 mV) = $(read_vbat)"
+		echo "  read_vbat (total mV) = $(read_vbat)"
 		_c=$(read_cells)
 		_v=$(read_vbat)
 		if [ -n "$_v" ] && [ "$_c" -gt 0 ]; then
-			echo "  单芯显示值 (mV) = $((_v / _c))"
+			echo "  Per-cell (mV) = $((_v / _c))"
 		fi
 		;;
 	votset)
@@ -6681,47 +6633,53 @@ case "$1" in
 		case "$2" in
 			'')
 				if [ -s "$VOT_PIN_FILE" ]; then
-					echo "当前钉住目标: $(cat "$VOT_PIN_FILE" 2>/dev/null)"
+					echo "Pinned target: $(cat "$VOT_PIN_FILE" 2>/dev/null)"
 				else
-					echo "当前为自适应（未钉住）"
+					echo "Mode: Auto (not pinned)"
 				fi
-				echo "用法: $0 votset {auto|目标名}    （目标名用 votdiag 查）"
+				echo "Usage: $0 votset {auto|target_name}    (run votdiag to list targets)"
 				;;
 			auto|AUTO)
 				rm -f "$VOT_PIN_FILE" 2>/dev/null
-				echo "已清除钉住，恢复自适应选择"
+				echo "Unpinned; reverted to auto selection"
 				;;
 			*)
 				[ -d "$VOT_ROOT" ] || mount -t debugfs none /sys/kernel/debug 2>/dev/null
 				if [ ! -d "$VOT_ROOT/$2" ]; then
-					echo "ERR: $VOT_ROOT/$2 不存在，请先用 votdiag 查看本机可用目标"
+					echo "ERR: $VOT_ROOT/$2 not found; run votdiag to see available targets"
 					exit 1
 				fi
 				printf '%s' "$2" > "$VOT_PIN_FILE" 2>/dev/null || {
-					echo "ERR: 写 $VOT_PIN_FILE 失败"
+					echo "ERR: Failed to write $VOT_PIN_FILE"
 					exit 1
 				}
-				echo "已钉住注入目标: $2"
-				echo "重启守护后生效: $0 stop; $0 start"
+				echo "Pinned inject target: $2"
+				echo "Restart daemon to apply: $0 stop; $0 start"
 				;;
 		esac
 		;;
 	votdiag)
-		# 只读诊断：判断「往哪些节点写 force_val 才真的有用」。
-		# 不写任何节点。用法: sh /system/bin/vfcs_boost votdiag
+		# 只读诊断：查看直控通道状态（debugfs pmic-votable 或 sysfs vfcs_class）。
 		[ -d "$VOT_ROOT" ] || mount -t debugfs none /sys/kernel/debug 2>/dev/null
-		echo "=== PMIC 判决层（注入通道）诊断 ==="
-		echo "机型: $(getprop ro.product.vendor.model 2>/dev/null)  平台: $(getprop ro.board.platform 2>/dev/null)"
-		echo "根目录: $VOT_ROOT"
-		if [ ! -d "$VOT_ROOT" ]; then
-			echo "结果: 不存在 —— 本机无该通道（架构差异），会交回系统控制"
+		VOT_OK=""; VOT_BACKEND=""
+		votable_ready >/dev/null 2>&1
+		echo "=== Direct Control Diagnostics ==="
+		echo "Model: $(getprop ro.product.vendor.model 2>/dev/null)  Platform: $(getprop ro.board.platform 2>/dev/null)"
+		echo "Backend : ${VOT_BACKEND:-none}   Ready=${VOT_OK:-0}"
+		echo "Selected: ${VOTE_TARGETS:-(none)}   [${VOT_SEL_WHY:-$VOT_WHY}]"
+		if [ "$VOT_BACKEND" = "sysfs" ] || [ ! -d "$VOT_ROOT" ]; then
+			echo ""
+			echo "--- vfcs_class direct nodes (MT6991 / V2507A) ---"
+			for _vn in fchg_fcc_ma fchg_disable debug_main_sm chg_protocol_support; do
+				[ -e "/sys/class/vfcs_class/$_vn" ] && \
+					echo "  $_vn = $(cat "/sys/class/vfcs_class/$_vn" 2>/dev/null)"
+			done
+			echo "  Note: non-zero fchg_fcc_ma triggers DCHG_FCC VFCS_CLASS_EVENT; 0 releases"
 			exit 0
 		fi
-		echo "默认目标: $VOTE_TARGETS"
-		vot_resolve_targets
-		echo "自动选中: ${VOTE_TARGETS:-（无）}   [${VOT_SEL_WHY:-未解析}]"
+		echo "Root dir: $VOT_ROOT"
 		echo ""
-		echo "--- 全部目标 ---"
+		echo "--- All Targets ---"
 		for _d in "$VOT_ROOT"/*; do
 			[ -d "$_d" ] || continue
 			_n=${_d##*/}
@@ -6731,20 +6689,20 @@ case "$1" in
 			_st=$(cat "$_d/status" 2>/dev/null)
 			if [ -n "$_st" ]; then
 				case "$_st" in
-					*en=1*) _lv="有 en=1 <-- 有人在投票，写它有希望生效" ;;
-					*)      _lv="全部 en=0 <-- 无人投票，写它【不产生效果】" ;;
+					*en=1*) _lv="has en=1 <-- active voters; writing may take effect" ;;
+					*)      _lv="all en=0 <-- no active voters; writing has no effect" ;;
 				esac
 				echo "    $_lv"
 				printf '%s\n' "$_st" | head -6 | sed 's/^/      /'
 			else
-				echo "    （无 status 文件）"
+				echo "    (no status file)"
 			fi
 		done
 		echo ""
-		echo "★ 只有「自动选中」的目标会被写入。"
-		echo "  · 若选中目标显示有人投票 -> 通道正常，电流应能跟着配置变"
-		echo "  · 若选中目标显示无人投票 -> 请把本段输出反馈到模块发布页；"
-		echo "    也可用 $0 votset <目标名> 手动钉住某个目标试一下"
+		echo "* Only the auto-selected target is written."
+		echo "  - Active voters present -> channel healthy, current should follow config"
+		echo "  - No active voters -> report this output on the module page;"
+		echo "    or test pinning one manually via $0 votset <target>"
 		;;
 	health)
 		# ============================================================
@@ -6992,13 +6950,26 @@ case "$1" in
 
 		# ---- 6. 判决层残留（最容易出问题的地方）----
 		local _t _fa _fv
-		for _t in $VOTE_TARGETS; do
-			_fa=""; _fv=""
-			read -r _fa < "$VOT_ROOT/$_t/force_active" 2>/dev/null
-			read -r _fv < "$VOT_ROOT/$_t/force_val" 2>/dev/null
-			echo "vot_${_t}_fa=${_fa:-?}"
-			echo "vot_${_t}_fv=${_fv:-?}"
-		done
+		VOT_OK=""; VOT_BACKEND=""
+		votable_ready >/dev/null 2>&1
+		if [ "$VOT_BACKEND" = "sysfs" ]; then
+			_fv=""; read -r _fv < "$NODE" 2>/dev/null
+			case "$_fv" in
+				''|*[!0-9-]*) _fa="?"; _fv="?" ;;
+				0) _fa="0" ;;
+				*) _fa="1" ;;
+			esac
+			echo "vot_DCHG_FCC_fa=${_fa}"
+			echo "vot_DCHG_FCC_fv=${_fv}"
+		else
+			for _t in $VOTE_TARGETS; do
+				_fa=""; _fv=""
+				read -r _fa < "$VOT_ROOT/$_t/force_active" 2>/dev/null
+				read -r _fv < "$VOT_ROOT/$_t/force_val" 2>/dev/null
+				echo "vot_${_t}_fa=${_fa:-?}"
+				echo "vot_${_t}_fv=${_fv:-?}"
+			done
+		fi
 
 		# ---- 7. 日志大小 ----
 		local _lsz
@@ -7008,7 +6979,7 @@ case "$1" in
 		# ---- 8. 版本 ----
 		local _mp
 		_mp="${0%/*}/../../module.prop"
-		[ -f "$_mp" ] || _mp="/data/adb/modules/v2352a_charge_boost/module.prop"
+		[ -f "$_mp" ] || _mp="/data/adb/modules/v2507a_charge_boost/module.prop"
 		echo "version=$(sed -n 's/^version=//p' "$_mp" 2>/dev/null)"
 
 		# ---- 9. 综合判定 ----
@@ -7025,20 +6996,20 @@ case "$1" in
 		#     reason 里也改成真正的百分比文本，不再把原始整数贴上 ‱ 符号。
 		_pct_txt() { awk -v v="$1" 'BEGIN{ if(v<0) printf "—"; else printf "%.2f%%", v/10000 }'; }
 		if [ "$_dh" = "dead" ]; then
-			_verdict="fail"; _reason="守护进程未运行"
+			_verdict="fail"; _reason="Daemon not running"
 		elif [ "$_sh" = "dead" ]; then
-			_verdict="warn"; _reason="看门狗未运行（守护仍活着）"
+			_verdict="warn"; _reason="Watchdog not running (daemon alive)"
 		elif [ "$_beat_age" -ge 0 ] && [ "$_beat_age" -gt 120 ]; then
-			_verdict="fail"; _reason="心跳已停 ${_beat_age}s，守护可能卡死"
+			_verdict="fail"; _reason="Heartbeat stopped ${_beat_age}s ago; daemon may be hung"
 		elif [ "${_drun:-0}" -lt 120 ]; then
 			# 守护刚启动，平均不可信，只做提示不报 warn
 			_verdict="ok"; _reason=""
 		elif [ "$_dl" -gt 20000 ]; then
-			_verdict="warn"; _reason="守护长期占用 $( _pct_txt "$_dl" )（阈值 2.00%）"
+			_verdict="warn"; _reason="Daemon avg CPU $( _pct_txt "$_dl" ) (> 2.00%)"
 		elif [ "$_sl" -gt 10000 ]; then
-			_verdict="warn"; _reason="看门狗长期占用 $( _pct_txt "$_sl" )（阈值 1.00%）"
+			_verdict="warn"; _reason="Watchdog avg CPU $( _pct_txt "$_sl" ) (> 1.00%)"
 		elif [ "$_ol" != "1" ] && [ "$_dl" -gt 5000 ]; then
-			_verdict="warn"; _reason="未插电但守护长期占用 $( _pct_txt "$_dl" )（阈值 0.50%）"
+			_verdict="warn"; _reason="Unplugged daemon avg CPU $( _pct_txt "$_dl" ) (> 0.50%)"
 		fi
 		echo "verdict=$_verdict"
 		echo "reason=$_reason"
@@ -7052,14 +7023,18 @@ case "$1" in
 		#  只读：不写任何节点、不改任何配置、不启停守护。
 		# ============================================================
 		load_profile >/dev/null 2>&1
+		VOT_OK=""; VOT_BACKEND=""
+		votable_ready >/dev/null 2>&1
+		_dmp="${0%/*}/../../module.prop"
+		[ -f "$_dmp" ] || _dmp="/data/adb/modules/v2507a_charge_boost/module.prop"
 		echo "=============================================="
-		echo " vivo V2352A 充电加速 · 调试快照"
-		echo " 版本: $(sed -n 's/^version=//p' "${0%/*}/../../module.prop" 2>/dev/null)"
-		echo " 时间: $(date '+%Y-%m-%d %H:%M:%S')"
-		echo " 开机: $(read_boot_id)"
+		echo " vivo V2507A Charge Boost · Debug Snapshot"
+		echo " Version : $(sed -n 's/^version=//p' "$_dmp" 2>/dev/null)"
+		echo " Time    : $(date '+%Y-%m-%d %H:%M:%S')"
+		echo " Boot ID : $(read_boot_id)"
 		echo "=============================================="
 		echo ""
-		echo "---- 1. 设备 ----"
+		echo "---- 1. Device ----"
 		echo "ro.product.model          = $(getprop ro.product.model 2>/dev/null)"
 		echo "ro.product.model.bbk      = $(getprop ro.product.model.bbk 2>/dev/null)"
 		echo "ro.product.vendor.model   = $(getprop ro.product.vendor.model 2>/dev/null)"
@@ -7069,82 +7044,86 @@ case "$1" in
 		echo "ro.build.display.id       = $(getprop ro.build.display.id 2>/dev/null)"
 		echo "uname                     = $(uname -a 2>/dev/null)"
 		echo ""
-		echo "---- 2. 模块状态 ----"
-		echo "档位 ACTIVE       = $ACTIVE ($(profile_name_of "$ACTIVE" 2>/dev/null))"
-		echo "守护进程          = $(daemon_running && echo 运行中 || echo 未运行)"
-		echo "守护 PID          = $(cat "$PIDFILE" 2>/dev/null)"
-		echo "临时解除标记      = $([ -f "$PAUSE_FLAG" ] && echo 存在 || echo 无)"
-		echo "设备类别 DEV_CLASS= ${DEV_CLASS:-未探测}"
-		echo "注入目标          = ${VOTE_TARGETS:-无}"
-		echo "注入量纲          = $(vot_mode_of 2>/dev/null)"
-		echo "通道就绪          = $(votable_ready && echo 是 || echo 否)"
-		echo "目标选择理由      = ${VOT_SEL_WHY:-—}"
+		echo "---- 2. Module State ----"
+		echo "Profile ACTIVE    = $ACTIVE ($(profile_name_of "$ACTIVE" 2>/dev/null))"
+		echo "Daemon            = $(daemon_running && echo Running || echo Stopped)"
+		echo "Daemon PID        = $(cat "$PIDFILE" 2>/dev/null)"
+		echo "Pause flag        = $([ -f "$PAUSE_FLAG" ] && echo Present || echo None)"
+		echo "DEV_CLASS         = ${DEV_CLASS:-unprobed}"
+		echo "Channel ready     = $([ "$VOT_OK" = "1" ] && echo Yes || echo No)"
+		echo "Direct backend    = ${VOT_BACKEND:-unresolved}"
+		echo "Inject target     = ${VOTE_TARGETS:-none}"
+		echo "Inject unit       = $(vot_mode_of 2>/dev/null)"
+		echo "Target reason     = ${VOT_SEL_WHY:-—}"
 		echo "VOT_WHY           = ${VOT_WHY:-—}"
-		echo "手动钉住文件      = $([ -f "$VOT_PIN_FILE" ] && cat "$VOT_PIN_FILE" 2>/dev/null || echo 无)"
+		echo "fchg_fcc_ma       = $(cat "$NODE" 2>/dev/null)"
+		echo "fchg_disable      = $(cat /sys/class/vfcs_class/fchg_disable 2>/dev/null)"
+		echo "debug_main_sm     = $(cat /sys/class/vfcs_class/debug_main_sm 2>/dev/null)"
+		echo "Pinned target     = $([ -f "$VOT_PIN_FILE" ] && cat "$VOT_PIN_FILE" 2>/dev/null || echo None)"
 		echo ""
-		echo "---- 3. 充电实时读数 ----"
+		echo "---- 3. Live Charging Readings ----"
 		echo "SOC               = $(read_soc)"
 		echo "status            = $(cat /sys/class/power_supply/battery/status 2>/dev/null)"
 		echo "present           = $(cat /sys/class/power_supply/battery/present 2>/dev/null)"
 		echo "vbat (mV)         = $(read_vbat)"
-		echo "ibat (µA)         = $(read_ibat "$(read_vbat)")"
+		echo "ibat (uA)         = $(read_ibat "$(read_vbat)")"
 		echo "batt current_now  = $(cat /sys/class/power_supply/battery/current_now 2>/dev/null)"
 		echo "fastchg_current   = $(cat /sys/class/cms_class/fastchg_current_now 2>/dev/null)"
 		echo "adapter_power     = $(cat /sys/class/cms_class/adapter_power 2>/dev/null)"
 		echo "vfloat_voltage    = $(cat /sys/class/cms_class/vfloat_voltage 2>/dev/null)"
-		echo "板级温度 (0.1C)   = $(read_temp_board)"
-		echo "电池温度 (0.1C)   = $(read_temp_batt)"
-		echo "充电在线          = $(read_charger_online)"
-		echo "输入功率          = $(read_input_power)"
+		echo "Board temp (0.1C) = $(read_temp_board)"
+		echo "Batt temp (0.1C)  = $(read_temp_batt)"
+		echo "Charger online    = $(read_charger_online)"
+		echo "Input power       = $(read_input_power)"
 		echo "usb/voltage_now   = $(cat /sys/class/power_supply/usb/voltage_now 2>/dev/null)"
 		echo "usb/current_now   = $(cat /sys/class/power_supply/usb/current_now 2>/dev/null)"
 		echo "usb/type          = $(cat /sys/class/power_supply/usb/usb_type 2>/dev/null)"
 		echo ""
-		echo "---- 4. 温度源 ----"
-		echo "板级源 = $(read_temp_source)"
-		echo "温度描述 = $(read_temp_desc)"
+		echo "---- 4. Temp Sources ----"
+		echo "Board src  = $(read_temp_source)"
+		echo "Temp desc  = $(read_temp_desc)"
 		echo "THERM_STATE = $THERM_STATE  TB_MED=$THERM_TB_MED TC_MED=$THERM_TC_MED"
 		echo "THERM_EN=$THERM_EN START=$THERM_START STOP=$THERM_STOP"
 		echo ""
-		echo "---- 5. DT 表 ----"
+		echo "---- 5. DT Table ----"
 		DT_PROBED=""; DT_TABLE_STATE=""; DT_TABLE=""
 		if dt_ensure 2>/dev/null; then
-			echo "表路径     = $DT_TC_NODE"
-			echo "平台       = $DT_PLATFORM"
-			echo "命中方式   = $DT_PROBE_HOW"
-			echo "老化档     = $(read_aging_stage)"
-			echo "循环数     = $(read_aging_cycle)"
-			echo "档位边界   = $(dt_aging_boundaries)"
-			echo "电压单位   = $(dt_detect_unit "$DT_TC_NODE")"
-			echo "分段边界   = ${BASELINE_SEGS_AUTO:-未读取}"
-			echo "载入表     = $DT_TABLE"
-			echo "DT 额度    = $(dt_restore_value "$(read_aging_stage)")"
-			echo "DT 全局上限= $(dt_cur_max)"
+			echo "Table path   = $DT_TC_NODE"
+			echo "Platform     = $DT_PLATFORM"
+			echo "Match method = $DT_PROBE_HOW"
+			echo "Aging stage  = $(read_aging_stage)"
+			echo "Cycle count  = $(read_aging_cycle)"
+			echo "Boundaries   = $(dt_aging_boundaries)"
+			echo "Voltage unit = $(dt_detect_unit "$DT_TC_NODE")"
+			echo "Seg bounds   = ${BASELINE_SEGS_AUTO:-unreadable}"
+			echo "Loaded table = $DT_TABLE"
+			echo "DT limit     = $(dt_restore_value "$(read_aging_stage)")"
+			echo "DT global cap= $(dt_cur_max)"
 		else
-			echo "DT 表读取失败（状态=$DT_TABLE_STATE）"
+			echo "DT table read failed (state=$DT_TABLE_STATE)"
 		fi
 		echo "cal_max    = $(cal_max)"
-		echo "cal_dt_max = $(cal_dt_max)   （本机 DT 标定值）"
-		echo "cal_oc     = $CAL_OC   （超频档 0=关 1=开，开启值上限 $CAL_OC_MAX）"
-		echo "cal_abs    = $CAL_ABS_HARD   （绝对保护线）"
+		echo "cal_dt_max = $(cal_dt_max)   (device DT calibration)"
+		echo "cal_oc     = $CAL_OC   (overclock 0=off 1=on, cap $CAL_OC_MAX)"
+		echo "cal_abs    = $CAL_ABS_HARD   (hard safety ceiling)"
 		echo "restore_ma = $(restore_ma)"
 		echo ""
-		echo "---- 6. 配置（profile）----"
+		echo "---- 6. Profile Config ----"
 		echo "I_LOW=$I_LOW I_MID=$I_MID I_PEAK=$I_PEAK I_MID2=$I_MID2 I_LOW2=$I_LOW2"
 		echo "VOTE_IBAT=$VOTE_IBAT VOTE_T1..T5=$VOTE_T1/$VOTE_T2/$VOTE_T3/$VOTE_T4/$VOTE_T5"
 		echo "SAFE_EN=$SAFE_EN SAFE_CAP=$SAFE_CAP SAFE_LOW=$SAFE_LOW SAFE_MID=$SAFE_MID SAFE_HIGH=$SAFE_HIGH"
 		echo "POWER_CAP_W=$POWER_CAP_W"
-		echo "profile 文件 = $PROFILE_FILE"
+		echo "Profile file = $PROFILE_FILE"
 		if [ -f "$PROFILE_FILE" ]; then
 			sed 's/^/    /' "$PROFILE_FILE" 2>/dev/null
 		else
-			echo "    （不存在，走默认值）"
+			echo "    (missing, using defaults)"
 		fi
 		echo ""
-		echo "---- 7. 判决层全部目标 ----"
+		echo "---- 7. All Voter Targets ----"
 		[ -d "$VOT_ROOT" ] || mount -t debugfs none /sys/kernel/debug 2>/dev/null
 		if [ -d "$VOT_ROOT" ]; then
-			echo "根目录 = $VOT_ROOT"
+			echo "Root dir = $VOT_ROOT"
 			for _d in "$VOT_ROOT"/*; do
 				[ -d "$_d" ] || continue
 				_n=${_d##*/}
@@ -7153,10 +7132,10 @@ case "$1" in
 				[ -n "$_st" ] && printf '%s\n' "$_st" | grep -i 'effective' | sed 's/^/    /'
 			done
 		else
-			echo "pmic-votable 不存在"
+			echo "pmic-votable missing"
 		fi
 		echo ""
-		echo "---- 8. sysfs 关键节点 ----"
+		echo "---- 8. Key sysfs Nodes ----"
 		echo "fchg_fcc_ma        = $(cat "$NODE" 2>/dev/null)"
 		echo "chg_protocol_support = $(cat /sys/class/vfcs_class/chg_protocol_support 2>/dev/null)"
 		echo "debug_chg_protocol_support = $(cat /sys/class/vfcs_class/debug_chg_protocol_support 2>/dev/null)"
@@ -7169,14 +7148,14 @@ case "$1" in
 			echo "    $_k = $(getprop "persist.vivo.$_k" 2>/dev/null)"
 		done
 		echo ""
-		echo "---- 9. dmesg 关键行（最近 40 条）----"
+		echo "---- 9. Key dmesg Lines (last 40) ----"
 		dmesg 2>/dev/null | grep -iE 'cms_check_batt_aging|aging_stage|vfcs_update_batt_aging|fchg_fcc|force_active|USER_FCC' | tail -n 40
 		echo ""
-		echo "---- 10. voter 最近事件 ----"
+		echo "---- 10. Recent voter Events ----"
 		dmesg 2>/dev/null | grep -iE 'vfcs-voter' | tail -n 30
 		echo ""
 		echo "=============================================="
-		echo " 快照结束"
+		echo " End of snapshot"
 		echo "=============================================="
 		;;
 	probe)
@@ -7189,14 +7168,14 @@ case "$1" in
 				pw=$(read_input_power)
 				echo "read_input_power -> [$pw]"
 				set -- $pw
-				echo "  电压=$1  电流=$2  功率=$3mW  来源=$4"
+				echo "  Volt=$1  Curr=$2  Power=${3}mW  Src=$4"
 				;;
 			*)
-				echo "用法: $0 probe {vbat|ibat|cells|power}"
+				echo "Usage: $0 probe {vbat|ibat|cells|power}"
 				;;
 		esac
 		;;
 	*)
-		echo "用法: $0 {start|stop|pause|resume|restore|status|once|table|power|profile|factory|getjson|setcal|cells|probe|votdiag|votset|debugdump|logs}"
+		echo "Usage: $0 {start|stop|pause|resume|restore|status|once|table|power|profile|factory|getjson|setcal|cells|probe|votdiag|votset|debugdump|logs}"
 		;;
 esac

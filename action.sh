@@ -2,21 +2,21 @@
 MODDIR="${0%/*}"
 BOOST="$MODDIR/system/bin/vfcs_boost"
 # 模块可能装在非标准路径，回退到模块目录
-[ -x "$BOOST" ] || BOOST="/data/adb/modules/v2352a_charge_boost/system/bin/vfcs_boost"
+[ -x "$BOOST" ] || BOOST="/data/adb/modules/v2507a_charge_boost/system/bin/vfcs_boost"
 
 NODE="/sys/class/vfcs_class/fchg_fcc_ma"
-PROFILE_FILE="/data/adb/v2352a_charge_boost.profile"
-PIDFILE="/data/adb/v2352a_charge_boost.pid"
-KEYFILE="/data/adb/v2352a_charge_boost.keys.tmp"
-RESTORE_MA=9720
+PROFILE_FILE="/data/adb/v2507a_charge_boost.profile"
+PIDFILE="/data/adb/v2507a_charge_boost.pid"
+KEYFILE="/data/adb/v2507a_charge_boost.keys.tmp"
+RESTORE_MA=0
 
-READ_TIMEOUT=15     # 整屏无操作超时（秒）
-COMBO_MS=400        # "上+下同时按"的判定窗口（毫秒）
-STAYON_MS=600000    # 菜单期间临时把熄屏超时设为 10 分钟
+READ_TIMEOUT=15     # Menu inactivity timeout (seconds)
+COMBO_MS=400        # Simultaneous Vol+ & Vol- threshold (ms)
+STAYON_MS=600000    # Temporary screen timeout during menu (10 min)
 
-# 熄屏控制的状态（用于恢复）
-ORIG_TIMEOUT=""     # 原始 screen_off_timeout
-SCREEN_CHANGED=0    # 是否改过熄屏设置
+# Screen timeout backup state (restored on exit)
+ORIG_TIMEOUT=""     # Original screen_off_timeout
+SCREEN_CHANGED=0    # Whether screen timeout was modified
 
 # ============================================================
 #  熄屏控制（菜单期间保持亮屏）
@@ -38,7 +38,7 @@ screen_keepon() {
 	# 记录原始熄屏超时
 	ORIG_TIMEOUT=$(settings get system screen_off_timeout 2>/dev/null)
 	case "$ORIG_TIMEOUT" in
-		''|*[!0-9-]*) ORIG_TIMEOUT="" ;;   # 读不到就算了
+		''|*[!0-9-]*) ORIG_TIMEOUT="" ;;   # Ignore if unreadable
 	esac
 
 	# 清理函数只设一次。
@@ -241,7 +241,7 @@ read_key() {
 				# 再等一下，看有没有配对的另一个键（组合键）
 				line2=""
 				t=0
-				while [ "$t" -lt 8 ]; do          # 最多等 800ms
+				while [ "$t" -lt 8 ]; do          # Wait up to 800ms
 					line2=$(head -n 1 "$KEYFILE" 2>/dev/null)
 					[ -n "$line2" ] && break
 					sleep 0.1 2>/dev/null || sleep 1
@@ -308,10 +308,10 @@ cur_active() {
 # 档位号 -> 显示名
 profile_label() {
 	case "$1" in
-		1) echo "激进档" ;;
-		2) echo "温和档" ;;
-		3) echo "原厂档" ;;
-		*) echo "未知" ;;
+		1) echo "Aggressive" ;;
+		2) echo "Balanced" ;;
+		3) echo "Stock" ;;
+		*) echo "Unknown" ;;
 	esac
 }
 
@@ -320,7 +320,7 @@ daemon_running() {
 }
 
 # ============================================================
-#  菜单绘制
+#  Menu rendering
 # ============================================================
 draw_menu() {
 	local cur=$1 active name mark
@@ -329,19 +329,19 @@ draw_menu() {
 
 	echo ""
 	echo "========================================"
-	echo "  iQOO Z9 Turbo 充电加速 (V2352A)"
-	echo "  iQOO Z9 Turbo 充电加速 · V2352A 本机适配"
+	echo "  iQOO Z10 Turbo+ Charge Boost (V2507A)"
+	echo "  iQOO Z10 Turbo+ · Native V2507A Build"
 	echo "========================================"
 	echo ""
-	echo "  音量上 / 下键        选择档位"
-	echo "  音量上 + 下【同时按】  确认"
+	echo "  Vol Up / Vol Down       Select profile"
+	echo "  Vol Up + Down (both)    Confirm"
 	echo ""
 	echo "----------------------------------------"
 	local n
 	for n in 1 2 3; do
 		name=$(profile_label "$n")
 		mark=""
-		[ "$n" = "$active" ] && mark="  <- 当前"
+		[ "$n" = "$active" ] && mark="  <- Active"
 		if [ "$n" = "$cur" ]; then
 			printf " ==>  %d. %s%s\n" "$n" "$name" "$mark"
 		else
@@ -350,9 +350,9 @@ draw_menu() {
 	done
 	echo "----------------------------------------"
 	if daemon_running; then
-		echo "  加速服务: 运行中"
+		echo "  Boost service: Running"
 	else
-		echo "  加速服务: 已停止"
+		echo "  Boost service: Stopped"
 	fi
 	echo "========================================"
 	echo ""
@@ -395,39 +395,39 @@ apply_profile() {
 after_apply() {
 	local a=$1
 	case "$a" in
-		1) echo "已切换到：激进档（默认）" ;;
-		2) echo "已切换到：温和档" ;;
-		3) echo "已切换到：原厂档" ;;
+		1) echo "Switched to: Aggressive (Default)" ;;
+		2) echo "Switched to: Balanced" ;;
+		3) echo "Switched to: Stock" ;;
 	esac
 	if daemon_running; then
-		echo "  加速服务: 运行中"
+		echo "  Boost service: Running"
 	else
-		echo "  加速服务: 已停止"
+		echo "  Boost service: Stopped"
 	fi
 	echo ""
-	echo "  请在凉快的环境下充电，不要边充边玩大型游戏，"
-	echo "  手机发烫时系统会更早介入降速。"
+	echo "  Charge in a cool environment and avoid heavy gaming while charging,"
+	echo "  as high device temperature triggers earlier system throttling."
 	echo ""
-	echo "  重新点一次执行按钮即可再次切换档位。"
-	echo "  遇到异常请先删除模块并重启，再重新安装一次。"
+	echo "  Tap the Action button again anytime to switch profiles."
+	echo "  If issues occur, uninstall the module, reboot, and reinstall."
 }
 
 # ============================================================
-#  降级方案
+#  Fallback exit
 # ============================================================
 fallback_exit() {
 	echo ""
 	echo "========================================"
-	echo "  无法读取音量键"
+	echo "  Unable to read volume keys"
 	echo "========================================"
 	echo ""
-	echo "  本机环境不支持音量键操作，"
-	echo "  未修改任何设置。"
+	echo "  Volume key input is unsupported in this environment."
+	echo "  No settings were modified."
 	echo ""
-	echo "  当前档位: $(profile_label "$(cur_active)")"
+	echo "  Current profile: $(profile_label "$(cur_active)")"
 	echo ""
-	echo "  请卸载模块后重启，再重新安装一次试试。"
-	echo "  如仍有问题请附 debugdump 输出到模块发布页反馈。"
+	echo "  Try uninstalling, rebooting, and reinstalling the module,"
+	echo "  or switch profiles via the WebUI instead."
 	echo ""
 	echo "========================================"
 	echo ""
@@ -450,14 +450,14 @@ main() {
 		logs|logdump|dump)
 			echo ""
 			echo "========================================"
-			echo "  iQOO Z9 Turbo 充电加速 · 导出调试日志"
+			echo "  iQOO Z10 Turbo+ Charge Boost · Debug Export"
 			echo "========================================"
 			echo ""
 			DUMP_SH="$MODDIR/logdump.sh"
-			[ -x "$DUMP_SH" ] || DUMP_SH="/data/adb/modules/v2352a_charge_boost/logdump.sh"
+			[ -x "$DUMP_SH" ] || DUMP_SH="/data/adb/modules/v2507a_charge_boost/logdump.sh"
 			if [ ! -f "$DUMP_SH" ]; then
-				echo "!! 找不到 logdump.sh"
-				echo "   期望位置: $DUMP_SH"
+				echo "!! logdump.sh not found"
+				echo "   Expected path: $DUMP_SH"
 				echo ""
 				sleep 8
 				exit 1
@@ -466,26 +466,26 @@ main() {
 			RC=$?
 			echo ""
 			if [ "$RC" = "0" ]; then
-				echo "  提示：日志包已放到 /sdcard/Download 下，"
-				echo "  文件名形如 v2352a_dbg_日期_时间.tar.gz"
+				echo "  Note: archive saved to /sdcard/Download,"
+				echo "  named like v2507a_dbg_DATE_TIME.tar.gz"
 			fi
 			echo ""
-			echo "  按音量键退出…"
+			echo "  Exiting shortly…"
 			sleep 10
 			exit 0
 			;;
 	esac
 
-	# 菜单期间保持亮屏（退出时自动恢复）
+	# Keep screen awake during menu (restored on exit)
 	screen_keepon
 
-	# 尽力唤醒屏幕（失败不影响流程）
+	# Wake screen if possible
 	command -v input >/dev/null 2>&1 && input keyevent 224 2>/dev/null
 
-	# 节点不存在说明模块未正确加载
+	# Missing node means module did not initialize cleanly
 	if [ ! -e "$NODE" ]; then
 		echo ""
-		echo "!! 加速服务未就绪，请确认模块已正确安装并重启过手机。"
+		echo "!! Boost service not ready. Ensure module is installed and rebooted."
 		echo ""
 		sleep 8
 		exit 1
@@ -495,38 +495,30 @@ main() {
 		fallback_exit
 	fi
 
-	# ★ v3.5.11：在【主进程】里探测毫秒时钟是否可用。
-	#   now_ms 是在后台子 shell（按键写入端）里被调用的，它设的 MS_OK=0
-	#   传不回主进程 —— 组合键判定在主进程里做，必须在这里单独探一次，
-	#   否则两边口径不一致（写端降级到秒、判端仍以为有毫秒）。
+	# ★ v3.5.11: detect millisecond clock in main process.
 	now_ms >/dev/null 2>&1
 	if [ "$MS_OK" != "1" ]; then
-		echo "  提示: 本机 date 不支持毫秒时间戳，组合键判定已关闭"
-		echo "  （请真正同时按下音量上+下，或改用 WebUI 切换档位）"
+		echo "  Note: date lacks millisecond precision; combo detection disabled"
+		echo "  (Press Vol+ and Vol- truly together, or use the WebUI instead)"
 		echo ""
 	fi
 
-	# 【注意】local 必须逐个写成 KEY=VAL 形式。
-	# 写成 "local a b=1" 时，某些 POSIX shell（如 Android 的 mksh/dash）
-	# 会把无 = 的词当作前一个变量的值，导致后续变量未声明。
 	local cur key
 	cur=$(cur_active)
 
 	while true; do
 		draw_menu "$cur"
 
-		# 读键：清空历史，避免上一轮残留
-		# 返回 up / down / confirm / ""（超时）
 		key=$(read_key "$READ_TIMEOUT" 1)
 
 		case "$key" in
 			"")
-				echo "  已超时取消，未修改任何设置"
+				echo "  Timed out; cancelled with no changes."
 				echo ""
 				break
 				;;
 			confirm)
-				echo "  确认中..."
+				echo "  Applying..."
 				echo ""
 				apply_profile "$cur"
 				after_apply "$cur"
@@ -536,14 +528,14 @@ main() {
 				if [ "$cur" -gt 1 ]; then
 					cur=$((cur - 1))
 				else
-					echo "  已经在最上面一项了"
+					echo "  Already at top item"
 				fi
 				;;
 			down)
 				if [ "$cur" -lt 3 ]; then
 					cur=$((cur + 1))
 				else
-					echo "  已经在最下面一项了"
+					echo "  Already at bottom item"
 				fi
 				;;
 		esac

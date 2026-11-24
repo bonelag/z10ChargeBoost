@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # ============================================================
-#  v2352a_charge_boost · service.sh  ★ v3568 彻底重写 ★
+#  v2507a_charge_boost · service.sh  ★ v3578 V2507A 原生适配 ★
 # ============================================================
 #  【为什么要重写】
 #    旧看门狗每 15 秒做一次存活检查，用的是：
@@ -24,12 +24,12 @@
 
 MODDIR=${0%/*}
 BOOST="$MODDIR/system/bin/vfcs_boost"
-PROFILE_FILE="/data/adb/v2352a_charge_boost.profile"
-LOG_FILE=/data/adb/v2352a_charge_boost.log
-PIDFILE=/data/adb/v2352a_charge_boost.pid
-LOCKDIR="/data/adb/v2352a_charge_boost.lock"
+PROFILE_FILE="/data/adb/v2507a_charge_boost.profile"
+LOG_FILE=/data/adb/v2507a_charge_boost.log
+PIDFILE=/data/adb/v2507a_charge_boost.pid
+LOCKDIR="/data/adb/v2507a_charge_boost.lock"
 SVC_LOCK="$LOCKDIR/service"
-HEARTBEAT=/data/adb/v2352a_charge_boost.beat
+HEARTBEAT=/data/adb/v2507a_charge_boost.beat
 
 CTL=/sys/class/vfcs_class/fchg_fcc_ma
 
@@ -44,9 +44,8 @@ CTL=/sys/class/vfcs_class/fchg_fcc_ma
 #     但本机实测无论 20s 还是 60s 都没出现过需要拉起的情况
 #     （之前那些“卡死”全是 cgroup 冻结导致的误判，已修复）。
 #     且 daemon 自己每 20s 打一次心跳，卡死仍能在 60s 内发现。
-WATCH_IV=60          # 看门狗巡检间隔（秒）。存活判定已改为零 fork，
-                     # 放宽到 20 秒只影响"守护崩了多久被发现"，无副作用。
-BEAT_STALE=120       # 心跳超过这么久没更新，判定 daemon 卡死
+WATCH_IV=60          # Watchdog interval (seconds), zero-fork alive check
+BEAT_STALE=120       # Heartbeat stale threshold (seconds)
 
 # ★ v3578：log() 跟随 profile 里的 LOG_EN（与 daemon 内的 log() 同源）。
 #   旧版 service.sh 的 log() 完全不看 LOG_EN —— 用户在 WebUI 里把「日志」
@@ -94,7 +93,7 @@ take_svc_lock() {
 	esac
 
 	if [ -n "$holder" ] && [ "$holder" != "$$" ] && kill -0 "$holder" 2>/dev/null; then
-		return 1    # 持有者活着 -> 重复启动
+		return 1    # Lock holder alive -> skip duplicate launch
 	fi
 
 	# 持有者已死（开机残留）-> 接管
@@ -168,34 +167,30 @@ read_log_en
 trap 'release_svc_lock; exit 0' EXIT
 trap 'exit 0' INT TERM HUP
 
-log "service.sh 启动 (pid=$$) [v3578]"
+log "service.sh started (pid=$$) [v3578]"
 
-# ------------------------------------------------------------
-# 等 sysfs 节点就绪（最多 30 秒）
-# ------------------------------------------------------------
+# Wait for sysfs node ready (up to 30s)
 i=0
 while [ $i -lt 30 ]; do
 	[ -e "$CTL" ] && break
 	sleep 1
 	i=$((i + 1))
-	[ $((i % 5)) -eq 0 ] && log "等待节点 $CTL 就绪... ${i}s"
+	[ $((i % 5)) -eq 0 ] && log "Waiting for node $CTL... ${i}s"
 done
 
 if [ ! -e "$CTL" ]; then
-	log "节点 $CTL 不存在，模块不启动"
+	log "Node $CTL missing; module aborting"
 	exit 0
 fi
-log "节点就绪（用时 ${i}s）"
+log "Node ready (${i}s)"
 
 chmod 755 "$BOOST" 2>/dev/null
 [ -f "$MODDIR/action.sh" ] && chmod 755 "$MODDIR/action.sh" 2>/dev/null
 
-# ------------------------------------------------------------
-# 档位持久化：原厂档(3) = 不干预，直接退出
-# ------------------------------------------------------------
+# Stock profile (3) = do not intervene, exit immediately
 read_active
 if [ "$ACTIVE_NOW" = "3" ]; then
-	log "档位=原厂(3)，跳过启动守护进程"
+	log "Profile=Stock(3); skipping daemon startup"
 	exit 0
 fi
 
@@ -227,9 +222,14 @@ cg_thaw() {
 	local _pid=$1
 	[ -z "$_pid" ] && return 1
 	[ -d "/proc/$_pid" ] || return 1
-	[ -w "$CG_UNFROZEN" ] || return 1
-	cg_of "$_pid" || return 1
+	cg_of "$_pid" || return 0
 	[ "$CG_PATH" = "/unfrozen" ] && return 0
+	# 天玑 Android 15 (V2507A) 等机型无 /sys/fs/cgroup/unfrozen：仅当确实被冻结时才报错
+	if [ ! -w "$CG_UNFROZEN" ]; then
+		cg_freeze_of "$CG_PATH"
+		[ "$CG_FREEZE" = "1" ] && return 1
+		return 0
+	fi
 	echo "$_pid" > "$CG_UNFROZEN" 2>/dev/null
 	cg_of "$_pid" || return 1
 	[ "$CG_PATH" = "/unfrozen" ] && return 0
@@ -309,15 +309,22 @@ cg_freeze_of() {
 
 CG_SELF_CHECK() {
 	local _pid=$$ _cg
-	cg_of "$_pid" || return 0          # 读不到就不管，别误伤
+	cg_of "$_pid" || return 0          # Skip if unreadable
 	_cg="$CG_PATH"
 	[ "$_cg" = "/unfrozen" ] && { SELF_DRIFT_N=0; SELF_DRIFT_LAST_CG=""; return 0; }
-	if echo "$_pid" > "$CG_UNFROZEN" 2>/dev/null; then
+	if [ ! -w "$CG_UNFROZEN" ]; then
+		cg_freeze_of "$_cg"
+		if [ "$CG_FREEZE" != "1" ]; then
+			SELF_DRIFT_N=0
+			SELF_DRIFT_LAST_CG=""
+			return 0
+		fi
+	elif echo "$_pid" > "$CG_UNFROZEN" 2>/dev/null; then
 		cg_of "$_pid"
 		if [ "$CG_PATH" = "/unfrozen" ]; then
 			[ "$SELF_DRIFT_LOGGED" = "1" ] || {
 				SELF_DRIFT_LOGGED=1
-				log "看门狗：自身曾被系统重新归类，已迁回 unfrozen（后续同类不再重复记录）"
+				log "Watchdog: moved self back to unfrozen cgroup (further moves suppressed)"
 			}
 			SELF_DRIFT_N=0
 			SELF_DRIFT_LAST_CG=""
@@ -325,50 +332,36 @@ CG_SELF_CHECK() {
 		fi
 	fi
 	cg_freeze_of "$_cg"
-	# ★ v3578：这条原来是【每 60 秒无条件写一行】—— 一天 1440 行、
-	#   约 90KB 纯噪声，把日志彻底淹掉（实测 30KB 日志全是它）。
-	#   现在按「状态变化 + 每 30 轮汇总」记录：
-	#     · cgroup 路径变了或第一次遇到 -> 立刻记一条（信息不丢）
-	#     · 原地重复 -> 每 30 轮（约 30 分钟）汇总一条，带累计次数
 	SELF_DRIFT_N=$(( SELF_DRIFT_N + 1 ))
 	if [ "$_cg" != "$SELF_DRIFT_LAST_CG" ] || [ "$SELF_DRIFT_LOGGED" = "0" ]; then
 		SELF_DRIFT_LOGGED=1
 		SELF_DRIFT_LAST_CG="$_cg"
-		log "⚠ 看门狗：自身 cgroup 漂移到 ${_cg}（freeze=${CG_FREEZE:-?}），迁移失败（同类后续每 30 轮汇总）"
+		log "WARN Watchdog: drifted to cgroup ${_cg} (freeze=${CG_FREEZE:-?}), thaw failed (summarizing every 30 rounds)"
 	elif [ $(( SELF_DRIFT_N % 30 )) -eq 0 ]; then
-		log "⚠ 看门狗：仍在 ${_cg}，已连续 ${SELF_DRIFT_N} 轮迁移失败（freeze=${CG_FREEZE:-?}）"
+		log "WARN Watchdog: still in ${_cg}, ${SELF_DRIFT_N} failed thaw rounds (freeze=${CG_FREEZE:-?})"
 	fi
 	return 1
 }
 
-# 把自己（看门狗）先迁出去，否则看门狗自己会被冻结，
-# 就不会再去救 daemon 了。
 cg_thaw "$$"
-log "看门狗自迁移到 unfrozen: $(grep '^0::' /proc/$$/cgroup 2>/dev/null | cut -d: -f3)"
+log "Watchdog initial cgroup: $(grep '^0::' /proc/$$/cgroup 2>/dev/null | cut -d: -f3)"
 
-# ------------------------------------------------------------
-# 启动守护
-# ------------------------------------------------------------
 "$BOOST" stop >/dev/null 2>&1
 sleep 1
 "$BOOST" start
 _DPID=$(cat "$PIDFILE" 2>/dev/null)
-log "守护拉起完成（pid=${_DPID}）"
+log "Daemon started (pid=${_DPID})"
 
-# 立刻迁出 daemon
 if [ -n "$_DPID" ]; then
 	cg_thaw "$_DPID"
-	log "daemon 迁移到 unfrozen: $(grep '^0::' /proc/$_DPID/cgroup 2>/dev/null | cut -d: -f3)"
+	log "Daemon cgroup: $(grep '^0::' /proc/$_DPID/cgroup 2>/dev/null | cut -d: -f3)"
 fi
 
-# ------------------------------------------------------------
-# DT 表缓存预热（开机一次性，避免用户首次点击卡 8 秒）
-# ------------------------------------------------------------
 "$BOOST" getjson >/dev/null 2>&1
-if [ -f /data/adb/v2352a_charge_boost.dtcache ]; then
-	log "DT 表缓存已预热"
+if [ -f /data/adb/v2507a_charge_boost.dtcache ]; then
+	log "DT cache prewarmed"
 else
-	log "DT 表缓存预热未成功（下次 getjson 会重试）"
+	log "DT cache prewarm skipped/incomplete (will retry on next getjson)"
 fi
 
 # ------------------------------------------------------------
@@ -381,7 +374,7 @@ BAD=0
 #   每一轮开始前用【内建重定向】建一个空标记文件（: > file，不 fork），
 #   sleep 之后用【内建 test -nt】比较 heartbeat 是否比标记新。
 #   这样"是否卡死"的整个判断过程没有一个子进程。
-MARK=/data/adb/v2352a_charge_boost.mark
+MARK=/data/adb/v2507a_charge_boost.mark
 
 while :; do
 	: > "$MARK" 2>/dev/null
@@ -400,23 +393,18 @@ while :; do
 	# ---- 档位守卫（零 fork）----
 	read_active
 	if [ "$ACTIVE_NOW" = "3" ]; then
-		log "看门狗：档位已切到原厂(3)，停止保活并退出"
+		log "Watchdog: profile switched to Stock(3), stopping keepalive and exiting"
 		"$BOOST" stop >>"$LOG_OUT" 2>&1
 		exit 0
 	fi
 
-	# ---- ★ 每次巡检都确认 daemon 还在 unfrozen ----
-	#   系统在某些场景下会重新给进程分组（比如管理器重启），
-	#   所以不能只在启动时迁移一次，每轮兜底更稳。
 	_p_now=""
 	read -r _p_now < "$PIDFILE" 2>/dev/null
 	[ -n "$_p_now" ] && cg_thaw "$_p_now"
 
-	# ---- 存活检查（零 fork）----
 	if daemon_alive; then
-		# 进程在，再看心跳有没有动过（区分"活着"和"卡死"）
 		if [ -f "$HEARTBEAT" ] && [ ! "$HEARTBEAT" -nt "$MARK" ]; then
-			log "⚠ 看门狗：守护进程在但心跳停摆，判定卡死"
+			log "WARN Watchdog: daemon alive but heartbeat stalled, treating as hung"
 			kill -9 "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null
 			rm -f "$PIDFILE" 2>/dev/null
 		else
@@ -426,14 +414,13 @@ while :; do
 		fi
 	fi
 
-	# ---- 拉起（冷却保护）----
 	DOWN=$((DOWN + 1))
 	if [ "$DOWN" -le 3 ]; then
-		log "⚠ 看门狗：守护不在运行（第 ${DOWN} 次），重新拉起"
+		log "WARN Watchdog: daemon not running (attempt ${DOWN}), restarting"
 	else
 		BAD=$((BAD + 1))
 		if [ $((BAD % 20)) -eq 1 ]; then
-			log "⚠ 看门狗：守护连续 ${DOWN} 次拉起失败，转入慢速重试"
+			log "WARN Watchdog: daemon restart failed ${DOWN} times consecutively, slowing retries"
 		fi
 		nap=$((DOWN * 10))
 		[ "$nap" -gt 300 ] && nap=300
@@ -443,10 +430,6 @@ while :; do
 	"$BOOST" start >>"$LOG_OUT" 2>&1
 	_p_new=""
 	read -r _p_new < "$PIDFILE" 2>/dev/null
-	# ★★ v3575：拉起后必须校验 cgroup 是否真的迁成功 ★★
-	#   原来只调 cg_thaw 不看返回值，失败了也没人知道，
-	#   下一轮 daemon_alive 仍判"活着"（因为 kill -0 对冻结进程也成功），
-	#   于是无限循环。现在失败直接计 BAD 并报警。
 	_cg_ok=1
 	if [ -n "$_p_new" ]; then
 		if cg_thaw "$_p_new"; then
@@ -457,7 +440,7 @@ while :; do
 	fi
 	sleep 2
 	if daemon_alive; then
-		log "看门狗：守护已恢复$([ "$_cg_ok" = "1" ] && echo "（但 cgroup 迁移未成功，已计入异常）" || echo "")"
+		log "Watchdog: daemon recovered$([ "$_cg_ok" = "1" ] && echo " (cgroup thaw failed, counted as abnormal)" || echo "")"
 		DOWN=0
 		[ "$_cg_ok" = "1" ] && BAD=$((BAD + 1)) || BAD=0
 	fi

@@ -1,11 +1,11 @@
 #!/system/bin/sh
 #
-# vivo V2352A 充电加速 · 日志导出（调试版）
+# vivo V2507A 充电加速 · 日志导出（调试版）
 #
 # 触发方式：
 #   1) 模块管理器里点【操作】按钮        (action.sh -> logs)
 #   2) WebUI 里点「导出调试日志」
-#   3) 命令行: su -c 'sh /data/adb/modules/v2352a_charge_boost/logdump.sh'
+#   3) 命令行: su -c 'sh /data/adb/modules/v2507a_charge_boost/logdump.sh'
 #
 # 安全：全程只读。只往 /sdcard 写一个包，不动任何节点、
 #       不改任何配置、不碰任何分区、不启停守护。
@@ -16,7 +16,7 @@
 MODDIR="${0%/*}"
 # 模块目录三重探测：脚本可能被拷到别处执行（WebUI 调起等）
 if [ ! -f "$MODDIR/module.prop" ]; then
-	for _c in /data/adb/modules/v2352a_charge_boost /data/adb/modules_update/v2352a_charge_boost; do
+	for _c in /data/adb/modules/v2507a_charge_boost /data/adb/modules_update/v2507a_charge_boost; do
 		[ -f "$_c/module.prop" ] && { MODDIR="$_c"; break; }
 	done
 fi
@@ -24,19 +24,19 @@ fi
 BOOST="$MODDIR/system/bin/vfcs_boost"
 [ -x "$BOOST" ] || BOOST="/system/bin/vfcs_boost"
 
-LOG=/data/adb/v2352a_charge_boost.log
+LOG=/data/adb/v2507a_charge_boost.log
 STAMP=$(date '+%Y%m%d_%H%M%S' 2>/dev/null)
 [ -n "$STAMP" ] || STAMP=$(date '+%s' 2>/dev/null)
 
 OUTDIR=/sdcard/Download
 mkdir -p "$OUTDIR" 2>/dev/null
-if ! : > "$OUTDIR/.wtest_v2352a" 2>/dev/null; then
+if ! : > "$OUTDIR/.wtest_v2507a" 2>/dev/null; then
 	OUTDIR=/data/local/tmp
 else
-	rm -f "$OUTDIR/.wtest_v2352a" 2>/dev/null
+	rm -f "$OUTDIR/.wtest_v2507a" 2>/dev/null
 fi
 
-NAME="v2352a_dbg_$STAMP"
+NAME="v2507a_dbg_$STAMP"
 WORK="/data/local/tmp/$NAME"
 OUT="$OUTDIR/$NAME.tar.gz"
 
@@ -45,73 +45,73 @@ mkdir -p "$WORK" 2>/dev/null || exit 1
 say() { echo "$*"; }
 
 # ------------------------------------------------------------------
-# 0. 说明
+# 0. Overview
 # ------------------------------------------------------------------
 {
-	echo "vivo V2352A 充电加速 · 调试日志包"
-	echo "生成时间: $(date '+%Y-%m-%d %H:%M:%S')"
-	echo "模块目录: $MODDIR"
+	echo "vivo V2507A Charge Boost · Debug Log Bundle"
+	echo "Generated: $(date '+%Y-%m-%d %H:%M:%S')"
+	echo "Module dir: $MODDIR"
 	echo ""
-	echo "内容清单："
-	echo "  00_README.txt          本文件"
+	echo "Contents:"
+	echo "  00_README.txt          This file"
 	echo "  01_module_prop.txt     module.prop"
-	echo "  02_debugdump.txt       vfcs_boost debugdump 完整快照"
-	echo "  03_daemon.log          守护进程日志（含 .1 轮转备份）"
-	echo "  04_config.txt          当前配置 + 全部运行时台账"
-	echo "  05_votable.txt         判决层全部目标 + status 全量"
-	echo "  06_dt_tables.txt       DT 表原始字节解码"
-	echo "  07_sysfs_snapshot.txt  sysfs 关键节点当前值"
-	echo "  08_dmesg.txt           dmesg 相关行"
-	echo "  09_getprop.txt         相关属性"
-	echo "  10_processes.txt       相关进程 + 守护存活判定"
-	echo "  11_logcat.txt          与模块相关的 logcat（若有）"
-	echo "  12_meta.txt            版本/机型/内核"
+	echo "  02_debugdump.txt       vfcs_boost debugdump full snapshot"
+	echo "  03_daemon.log          Daemon log (incl. .1 rotated backup)"
+	echo "  04_config.txt          Current config + all runtime ledgers"
+	echo "  05_votable.txt         All voter targets + full status"
+	echo "  06_dt_tables.txt       DT table raw byte decode"
+	echo "  07_sysfs_snapshot.txt  Current values of key sysfs nodes"
+	echo "  08_dmesg.txt           Relevant dmesg lines"
+	echo "  09_getprop.txt         Relevant properties"
+	echo "  10_processes.txt       Related processes + daemon liveness check"
+	echo "  11_logcat.txt          Module-related logcat (if any)"
+	echo "  12_meta.txt            Version/model/kernel"
 	echo ""
-	echo "把整个包发出来即可。"
+	echo "Send the entire bundle archive."
 } > "$WORK/00_README.txt" 2>/dev/null
 
 if [ -f "$MODDIR/module.prop" ]; then
 	cp -f "$MODDIR/module.prop" "$WORK/01_module_prop.txt" 2>/dev/null
 else
-	echo "module.prop 不存在" > "$WORK/01_module_prop.txt"
+	echo "module.prop not found" > "$WORK/01_module_prop.txt"
 fi
 
 # ------------------------------------------------------------------
-# 1. 主快照（最强的一块）
+# 1. Main snapshot
 # ------------------------------------------------------------------
 if [ -x "$BOOST" ]; then
 	"$BOOST" debugdump > "$WORK/02_debugdump.txt" 2>&1
 else
-	echo "vfcs_boost 不存在或不可执行: $BOOST" > "$WORK/02_debugdump.txt"
+	echo "vfcs_boost missing or not executable: $BOOST" > "$WORK/02_debugdump.txt"
 fi
 
 # ------------------------------------------------------------------
-# 2. 守护日志
+# 2. Daemon log
 # ------------------------------------------------------------------
 if [ -f "$LOG" ]; then
 	cp -f "$LOG" "$WORK/03_daemon.log" 2>/dev/null
 	[ -f "$LOG.1" ] && cat "$LOG.1" >> "$WORK/03_daemon.log" 2>/dev/null
 else
-	echo "（无日志文件 $LOG）" > "$WORK/03_daemon.log"
+	echo "(No log file $LOG)" > "$WORK/03_daemon.log"
 fi
 
 # ------------------------------------------------------------------
-# 3. 配置 + 运行时台账
+# 3. Config + runtime ledgers
 # ------------------------------------------------------------------
 {
 	echo "===== profile ====="
-	if [ -f /data/adb/v2352a_charge_boost.profile ]; then
-		cat /data/adb/v2352a_charge_boost.profile 2>/dev/null
+	if [ -f /data/adb/v2507a_charge_boost.profile ]; then
+		cat /data/adb/v2507a_charge_boost.profile 2>/dev/null
 	else
-		echo "（无 profile，走默认值）"
+		echo "(No profile, using defaults)"
 	fi
 	echo ""
-	echo "===== 运行时台账文件 ====="
-	for f in /data/adb/v2352a_charge_boost.*; do
+	echo "===== Runtime ledger files ====="
+	for f in /data/adb/v2507a_charge_boost.*; do
 		[ -f "$f" ] || continue
 		case "$f" in
 			*.status.json)
-				echo "--- $f ($(wc -c < "$f" 2>/dev/null) bytes，内容见 02_debugdump.txt)"
+				echo "--- $f ($(wc -c < "$f" 2>/dev/null) bytes, content in 02_debugdump.txt)"
 				continue ;;
 			esac
 		echo "--- $f ($(wc -c < "$f" 2>/dev/null) bytes)"
@@ -120,13 +120,19 @@ fi
 } > "$WORK/04_config.txt" 2>&1
 
 # ------------------------------------------------------------------
-# 4. 判决层全量
+# 4. Voter layer / VFCS channel state
 # ------------------------------------------------------------------
 {
+	echo "===== vfcs_class direct-control mapping (DCHG_FCC / VFCS_CLASS_EVENT) ====="
+	for n in fchg_fcc_ma fchg_disable debug_main_sm chg_protocol_support debug_chg_protocol_support; do
+		f="/sys/class/vfcs_class/$n"
+		[ -e "$f" ] && printf '%-28s = %s\n' "$n" "$(cat "$f" 2>/dev/null)"
+	done
+	echo ""
 	V=/sys/kernel/debug/pmic-votable
 	[ -d "$V" ] || mount -t debugfs none /sys/kernel/debug 2>/dev/null
 	if [ -d "$V" ]; then
-		echo "根目录: $V"
+		echo "Root dir: $V"
 		for d in "$V"/*; do
 			[ -d "$d" ] || continue
 			n=${d##*/}
@@ -138,37 +144,47 @@ fi
 			cat "$d/status" 2>/dev/null
 		done
 	else
-		echo "pmic-votable 不存在（debugfs 未挂载或无该通道）"
+		echo "pmic-votable missing or empty (Dimensity MT6991 uses vfcs_class/fchg_fcc_ma channel)"
 	fi
 } > "$WORK/05_votable.txt" 2>&1
 
 # ------------------------------------------------------------------
-# 5. DT 表原始解码
+# 5. Raw DT table decoding
 # ------------------------------------------------------------------
 {
-	B=/sys/firmware/devicetree/base/soc/qcom,pmic_glink/cms_v5
-	echo "===== 本机 DT 表原始解码（big-endian uint32）====="
-	echo "路径: $B"
-	echo ""
-	for sub in "" "/single_charger_board"; do
-		D="$B$sub"
+	echo "===== Raw Device Tree table dump (big-endian uint32) ====="
+	for D in \
+		/sys/firmware/devicetree/base/vfcs_cms \
+		/sys/firmware/devicetree/base/soc/qcom,pmic_glink/cms_v5 \
+		/sys/firmware/devicetree/base/soc/qcom,pmic_glink/cms_v5/single_charger_board; do
 		[ -d "$D" ] || continue
-		for f in "$D"/vivo,aging-normal-tc-data-* "$D"/vivo,normal-tc-data "$D"/vivo,batt-aging-cycle-range "$D"/vivo,soh-cycle-table; do
+		echo "Dir: $D"
+		for f in "$D"/vivo,aging-normal-tc-data-* "$D"/vivo,aging1-normal-tc-data-* "$D"/vivo,normal-tc-data-* "$D"/vivo,normal-tc-data "$D"/vivo,sp-primary-fbon-tc-data "$D"/vivo,sp-primary-fboff-tc-data "$D"/vivo,bat-aging-cycle-range "$D"/vivo,batt-aging-cycle-range "$D"/vivo,soh-cycle-table; do
 			[ -r "$f" ] || continue
 			echo "---------- ${f##*/}  ($(wc -c < "$f" 2>/dev/null) bytes) ----------"
 			od -An -tu1 -v "$f" 2>/dev/null | awk '{ for(i=1;i<=NF;i++) b[++c]=$i } END { n=int(c/4); for(k=0;k<n;k++){ p=k*4+1; v=b[p]*16777216+b[p+1]*65536+b[p+2]*256+b[p+3]; printf "%s ", v; if((k+1)%11==0) printf "\n" } printf "\n" }'
 			echo ""
 		done
 	done
-	echo "===== 全局上限节点 ====="
-	for f in /sys/firmware/devicetree/base/soc/vfcs/vivo,fchg-curr-max-ma /sys/firmware/devicetree/base/vfcs/vivo,fchg-curr-max-ma /sys/firmware/devicetree/base/vivo,fchg-curr-max-ma; do
+	echo "===== Global limit & protocol DT nodes ====="
+	for f in \
+		/sys/firmware/devicetree/base/vfcs/vivo,fchg-curr-max-ma \
+		/sys/firmware/devicetree/base/vfcs/vivo,pps-fchg-curr-max-ma \
+		/sys/firmware/devicetree/base/vfcs/vivo,ufcs-fchg-curr-max-ma \
+		/sys/firmware/devicetree/base/vfcs/vivo,fchg-vbus-max-mv \
+		/sys/firmware/devicetree/base/vfcs/vivo,fchg-ibus-max-ma \
+		/sys/firmware/devicetree/base/vfcs/vivo,fchg-vfloat-max-mv \
+		/sys/firmware/devicetree/base/vfcs_cms/vivo,max-power-current-limit-ma \
+		/sys/firmware/devicetree/base/vfcs_cms/vivo,bat-vfloat-mv \
+		/sys/firmware/devicetree/base/soc/vfcs/vivo,fchg-curr-max-ma \
+		/sys/firmware/devicetree/base/vivo,fchg-curr-max-ma; do
 		[ -r "$f" ] || continue
 		echo "$f = $(od -An -tu1 -v "$f" 2>/dev/null | awk '{print $1*16777216+$2*65536+$3*256+$4}')"
 	done
 } > "$WORK/06_dt_tables.txt" 2>&1
 
 # ------------------------------------------------------------------
-# 6. sysfs 快照
+# 6. sysfs snapshot
 # ------------------------------------------------------------------
 {
 	echo "===== /sys/class/vfcs_class ====="
@@ -177,22 +193,27 @@ fi
 		printf '%-24s = %s\n' "${f##*/}" "$(cat "$f" 2>/dev/null | head -c 200 | tr '\n' '|')"
 	done
 	echo ""
-	echo "===== battery 关键项 ====="
+	echo "===== battery key fields ====="
 	for n in status present capacity voltage_now current_now current_avg temp health charge_counter charge_full charge_full_design cycle_count chg_voltage charger_voltage chg_type charging_speed voltage_max soc_decimal power_now; do
 		f="/sys/class/power_supply/battery/$n"
 		[ -e "$f" ] || continue
 		printf '%-24s = %s\n' "$n" "$(cat "$f" 2>/dev/null)"
 	done
 	echo ""
-	echo "===== usb ====="
+	echo "===== usb & primary_chg ====="
 	for n in online present voltage_now current_now voltage_max usb_type type; do
 		f="/sys/class/power_supply/usb/$n"
 		[ -e "$f" ] || continue
 		printf '%-24s = %s\n' "usb/$n" "$(cat "$f" 2>/dev/null)"
 	done
+	for n in constant_charge_current input_current_limit usb_type status; do
+		f="/sys/class/power_supply/primary_chg/$n"
+		[ -e "$f" ] || continue
+		printf '%-24s = %s\n' "primary_chg/$n" "$(cat "$f" 2>/dev/null)"
+	done
 	echo ""
-	echo "===== cms_class 关键项 ====="
-	for n in htccc_enable factory_mode_state scene_mode scene_level scene_disable fastchg_current_now fastchg_is_ok adapter_power vfloat_voltage charging_technology charging_speed primary_board_temp main_batt_temp sub_batt_temp bat_btb_therm chg_pmos_temp battery_health_cyclecount battery_health_learning_soh cms_enable disable_charge; do
+	echo "===== cms_class key fields ====="
+	for n in htccc_enable factory_mode_state scene scene_mode scene_level scene_disable fastchg_current_now fastchg_is_ok adapter_power vfloat_voltage charging_technology charging_speed chg_voltage ibus chg_type debug_chg_cur ai_charge_rate_mode primary_board_temp bat_therm vir_shell_temp main_batt_temp sub_batt_temp bat_btb_therm chg_pmos_temp battery_health_cyclecount battery_health_learning_soh cms_enable disable_charge; do
 		f="/sys/class/cms_class/$n"
 		[ -e "$f" ] || continue
 		printf '%-24s = %s\n' "$n" "$(cat "$f" 2>/dev/null | head -c 300 | tr '\n' '|')"
@@ -211,52 +232,52 @@ fi
 # 7. dmesg
 # ------------------------------------------------------------------
 {
-	echo "===== 充电 / 老化 / voter（最近 500 条）====="
+	echo "===== Charging / aging / voter (last 500 lines) ====="
 	dmesg 2>/dev/null | grep -iE 'cms_v5|cms_check|aging|vfcs|voter|fchg_fcc|force_active|USER_FCC' | tail -n 500
 } > "$WORK/08_dmesg.txt" 2>&1
 
 # ------------------------------------------------------------------
-# 8. 属性
+# 8. Properties
 # ------------------------------------------------------------------
 {
 	getprop 2>/dev/null | grep -iE 'vivo|bbk|charge|batt|ro.product.model|build.version|board.platform'
 } > "$WORK/09_getprop.txt" 2>&1
 
 # ------------------------------------------------------------------
-# 9. 进程
+# 9. Processes
 # ------------------------------------------------------------------
 {
-	echo "===== 模块相关进程 ====="
-	ps -A -o pid,ppid,args 2>/dev/null | grep -iE 'vfcs_boost|v2352a|__daemon' | grep -v grep
+	echo "===== Module processes ====="
+	ps -A -o pid,ppid,args 2>/dev/null | grep -iE 'vfcs_boost|v2507a|__daemon' | grep -v grep
 	echo ""
-	echo "===== 守护存活判定 ====="
-	if [ -f /data/adb/v2352a_charge_boost.pid ]; then
-		p=$(cat /data/adb/v2352a_charge_boost.pid 2>/dev/null)
+	echo "===== Daemon liveness ====="
+	if [ -f /data/adb/v2507a_charge_boost.pid ]; then
+		p=$(cat /data/adb/v2507a_charge_boost.pid 2>/dev/null)
 		echo "pidfile = $p"
-		if kill -0 "$p" 2>/dev/null; then echo "存活: 是"; else echo "存活: 否（僵尸 pidfile）"; fi
+		if kill -0 "$p" 2>/dev/null; then echo "alive: yes"; else echo "alive: no (stale pidfile)"; fi
 	else
-		echo "无 pidfile（守护未启动或在原厂档）"
+		echo "no pidfile (daemon not started or on Stock profile)"
 	fi
 } > "$WORK/10_processes.txt" 2>&1
 
 # ------------------------------------------------------------------
-# 10. logcat（尽力而为，可能为空）
+# 10. logcat
 # ------------------------------------------------------------------
 if command -v logcat >/dev/null 2>&1; then
 	logcat -d -t 800 2>/dev/null | grep -iE 'vivo.*charg|vfcs|cms_v5|batt' | tail -n 400 > "$WORK/11_logcat.txt" 2>/dev/null
 fi
-[ -s "$WORK/11_logcat.txt" ] || echo "（logcat 无相关行或不可用）" > "$WORK/11_logcat.txt"
+[ -s "$WORK/11_logcat.txt" ] || echo "(no relevant logcat entries or unavailable)" > "$WORK/11_logcat.txt"
 
 # ------------------------------------------------------------------
-# 11. 元信息
+# 11. Metadata
 # ------------------------------------------------------------------
 {
-	echo "===== 模块 ====="
+	echo "===== Module ====="
 	echo "name        : $(sed -n 's/^name=//p' "$MODDIR/module.prop" 2>/dev/null)"
 	echo "version     : $(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null)"
 	echo "versionCode : $(sed -n 's/^versionCode=//p' "$MODDIR/module.prop" 2>/dev/null)"
 	echo ""
-	echo "===== 设备 ====="
+	echo "===== Device ====="
 	echo "ro.product.model        = $(getprop ro.product.model)"
 	echo "ro.product.model.bbk    = $(getprop ro.product.model.bbk)"
 	echo "ro.product.vendor.model = $(getprop ro.product.vendor.model)"
@@ -273,7 +294,7 @@ fi
 } > "$WORK/12_meta.txt" 2>&1
 
 # ------------------------------------------------------------------
-# 12. 打包（toybox tar + gzip）
+# 12. Archive (toybox tar + gzip)
 # ------------------------------------------------------------------
 PARENT=$(dirname "$WORK")
 BASE=$(basename "$WORK")
@@ -285,20 +306,20 @@ RC=$?
 if [ "$RC" = "0" ] && [ -s "$OUT" ]; then
 	SZ=$(wc -c < "$OUT" 2>/dev/null)
 	say "=================================================="
-	say " 调试日志包已生成"
+	say " Debug log bundle generated"
 	say "=================================================="
 	say ""
-	say " 文件: $OUT"
-	say " 大小: $SZ 字节"
-	say " 原始: $WORK"
+	say " File: $OUT"
+	say " Size: $SZ bytes"
+	say " Raw : $WORK"
 	say ""
-	say " 把这个文件发出去即可（手机任意解压工具可开）"
-	say " 不需要原始目录时可手动删除。"
+	say " Share the archive file directly (standard .tar.gz)."
+	say " You may delete the temporary raw folder if unneeded."
 	say "=================================================="
 	RESULT_PATH="$OUT"
 else
-	say "!! 打包失败（rc=$RC）。原始文件在：$WORK"
-	say "   可直接从该目录逐个取用。"
+	say "!! Archive failed (rc=$RC). Raw files kept at: $WORK"
+	say "   You can inspect files directly from that folder."
 	RESULT_PATH="$WORK"
 fi
 

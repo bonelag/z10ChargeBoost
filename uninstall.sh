@@ -41,10 +41,10 @@ if [ -n "$MODPATH" ] && [ -x "$MODPATH/system/bin/vfcs_boost" ]; then
 elif [ -n "$_UF_DIR" ] && [ -x "$_UF_DIR/system/bin/vfcs_boost" ]; then
 	BOOST="$_UF_DIR/system/bin/vfcs_boost"
 else
-	BOOST="/data/adb/modules/v2352a_charge_boost/system/bin/vfcs_boost"
+	BOOST="/data/adb/modules/v2507a_charge_boost/system/bin/vfcs_boost"
 fi
 NODE="/sys/class/vfcs_class/fchg_fcc_ma"
-ORIG_FILE="/data/adb/v2352a_charge_boost.orig"
+ORIG_FILE="/data/adb/v2507a_charge_boost.orig"
 
 # DT 档位表
 #
@@ -77,7 +77,7 @@ read_vbat_mv() {
 		case "$v" in ''|*[!0-9]*) continue ;; esac
 		[ "$v" -le 0 ] && continue
 		if [ ${#v} -ge 6 ]; then
-			v=$((v / 1000))      # 6~8 位 = µV
+			v=$((v / 1000))      # 6-8 digits = uV
 		fi
 		echo "$v"; return 0
 	done
@@ -272,7 +272,7 @@ dt_seg_field() {
 #   新版完全依赖本机 DT；DT 读不到时【返回空】，
 #   由调用方决定退到什么，而不是硬塞一个可能错的数。
 #   —— 这符合用户明确要求："要在他们自己的机型上读取，而不是写死"。
-AGING_STAGE_TABLE=""       # 缓存：DT 边界值，空格分隔
+AGING_STAGE_TABLE=""       # Cache: DT cycle boundaries, space-separated
 
 dt_aging_boundaries() {
 	[ -n "$AGING_STAGE_TABLE" ] && { echo "$AGING_STAGE_TABLE"; return 0; }
@@ -430,7 +430,7 @@ dt_probe() {
 			[ "$sz" = "440" ] || continue
 			# 老化档非 0 却命中 -0 表 -> 明确告警
 			if [ "$stage" != "0" ]; then
-				echo "⚠ 老化档 ${stage} 的表不存在，退回 ${name}（恢复值为未老化档口径）" >&2
+				echo "WARN: table for aging stage ${stage} missing; falling back to ${name} (unaged baseline)" >&2
 			fi
 			echo "$f"; return 0
 		done
@@ -515,7 +515,7 @@ dt_cur_scale() {
 		if [ "$k_auto" -gt 0 ] && [ "$k_use" -gt 0 ]; then
 			if [ $(( (k_auto - k_use) * 100 / k_use )) -gt 40 ] || \
 			   [ $(( (k_use - k_auto) * 100 / k_use )) -gt 40 ]; then
-				echo "⚠ 电流换算: 表值=${raw} x${k_use} 与上限 ${cap}mA 反算 k=${k_auto} 偏差较大" >&2
+				echo "WARN: current scale: raw=${raw} x${k_use} vs max ${cap}mA k=${k_auto} mismatch" >&2
 			fi
 		fi
 	fi
@@ -561,7 +561,7 @@ dt_restore_value() {
 # 判据：命令行里同时含本模块的 service.sh 路径特征与 WATCH_IV 轮询痕迹。
 _stop_watchdog() {
 	for p in $(ps -A -o pid,args 2>/dev/null | awk '
-		$0 ~ /v2352a_charge_boost/ && $0 ~ /service\.sh/ && $0 !~ /awk/ {print $1}'); do
+		($0 ~ /v2507a_charge_boost/ || $0 ~ /v2352a_charge_boost/) && $0 ~ /service\.sh/ && $0 !~ /awk/ {print $1}'); do
 		case "$p" in ''|*[!0-9]*) continue ;; esac
 		kill -9 "$p" 2>/dev/null
 	done
@@ -572,7 +572,7 @@ _stop_watchdog() {
 		[ "$p" = "$$" ] && continue
 		c=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null)
 		case "$c" in
-			*v2352a_charge_boost*service.sh*) kill -9 "$p" 2>/dev/null ;;
+			*v2507a_charge_boost*service.sh*|*v2352a_charge_boost*service.sh*) kill -9 "$p" 2>/dev/null ;;
 		esac
 	done
 	return 0
@@ -588,8 +588,8 @@ UNINST_RESTORE_BY=""
 if [ -x "$BOOST" ]; then
 	_r=$("$BOOST" restore 2>/dev/null)
 	case "$_r" in
-		*已恢复原厂*|*交回系统*)
-			UNINST_RESTORE_BY="模块 restore：$(echo "$_r" | grep -m1 '方式:' 2>/dev/null)"
+		*Restored\ stock*|*Handed\ back*)
+			UNINST_RESTORE_BY="module restore: $(echo "$_r" | grep -m1 -E 'Method:' 2>/dev/null)"
 			;;
 		*)
 			UNINST_RESTORE_BY=""
@@ -598,9 +598,9 @@ if [ -x "$BOOST" ]; then
 fi
 
 # 兜底：按 pidfile 再杀一次守护
-if [ -f /data/adb/v2352a_charge_boost.pid ]; then
-	kill "$(cat /data/adb/v2352a_charge_boost.pid)" 2>/dev/null
-	rm -f /data/adb/v2352a_charge_boost.pid
+if [ -f /data/adb/v2507a_charge_boost.pid ]; then
+	kill "$(cat /data/adb/v2507a_charge_boost.pid)" 2>/dev/null
+	rm -f /data/adb/v2507a_charge_boost.pid
 fi
 
 # 兜底：按真实进程清扫所有遗留守护实例
@@ -610,7 +610,7 @@ for p in $(ps -A -o pid,args 2>/dev/null | awk '
 	case "$p" in ''|*[!0-9]*) continue ;; esac
 	kill -9 "$p" 2>/dev/null
 done
-rm -rf /data/adb/v2352a_charge_boost.lock
+rm -rf /data/adb/v2507a_charge_boost.lock
 
 # ---- ③ 兜底链（与 restore_to_system 同序：orig → DT → 兜底）----
 # 【为什么不能只写 9720】那是 K80 Ultra 的标定值，
@@ -637,7 +637,7 @@ case "$_cur_node" in ''|*[!0-9]*) _cur_node="" ;; esac
 #       wrote=1
 #   完全匹配不上 —— 这个判据从来没生效过，等于白写。
 #   现在两种格式都认（wrote=1 / :written），并额外校验 boot_id 是否本次开机。
-_sf=/data/adb/v2352a_charge_boost.session
+_sf=/data/adb/v2507a_charge_boost.session
 if [ -s "$_sf" ]; then
 	_sf_c=$(cat "$_sf" 2>/dev/null)
 	case "$_sf_c" in
@@ -647,7 +647,7 @@ fi
 
 # c) 指纹：把 profile 里的分段电流/总闸收集成一个候选集
 #    （必须在删 profile 之前读）
-_pf0="/data/adb/v2352a_charge_boost.profile"
+_pf0="/data/adb/v2507a_charge_boost.profile"
 FP_LIST=""
 if [ -f "$_pf0" ]; then
 	while IFS='=' read -r _k _v; do
@@ -683,43 +683,19 @@ fi
 #    节点 != 0 -> 无论有没有台账，一律写 0
 # ============================================================
 if [ "$WROTE_NODE" = "0" ] && [ -n "$_cur_node" ] && [ "$_cur_node" != "0" ]; then
-	# 本机：非 0 即偏离出厂态，收回
 	WROTE_NODE=1
-	FP_NOTE="（本机无台账但节点=${_cur_node}≠0，判定为需收回）"
+	FP_NOTE="(no state file but node=${_cur_node} != 0; scheduled to reset)"
 fi
 
 if [ "$WROTE_NODE" = "0" ]; then
-	DONE="节点已是 0（本机出厂静止态 = 不参与申请），无需改动"
+	DONE="node already 0 (stock idle state, nothing to change)"
 elif [ -z "$UNINST_RESTORE_BY" ]; then
-	# ============================================================
-	#  ★★ v3530 修（演练实测发现的决定性 bug）★★
-	# ------------------------------------------------------------
-	#  这里原来是「① 原始值备份 -> ② DT 档位表 -> 兜底」三段链，
-	#  在本机上【每一段都可能写错值】：
-	#
-	#   · 演练实测：节点当前 14100（模块写过的状态），无 ORIG 备份，
-	#     于是走 ② DT 表 -> dt_restore_value -> 5950（= 238 × 25）。
-	#     那个 ×25 是 iQOO13 (V2408A) 的标定系数，本机不用；
-	#     dt_cur_scale 自己都在告警「与上限 14100 反算 k=59 偏差较大」，
-	#     但算错的结果照样被写进节点。
-	#   · 结果：卸载后 fchg_fcc_ma=5950，DCHG_FCC 的 effective 变成
-	#     DEBUG_FORCE_CLIENT v=5950 —— 把系统钉死在 5950mA 申请额度上。
-	#     本机出厂态是 0（不参与申请，由 FCHG_DEFAULT_EVENT 给 14100），
-	#     所以这正是「卸载后快充反而不如不装」的真实成因。
-	#
-	#  【本机正确语义】交回 = 写 0，别无他选。
-	#    0    = 不参与申请，系统按 DT/协议自己裁定  ← 出厂行为
-	#    非 0 = DEBUG_FORCE_CLIENT 接管，比出厂更硬  ← 都是"钉住"
-	#  所以本机分支直接写 0，不再尝试 ORIG / DT（那两条是给
-	#  fchg_fcc_ma 为"只进不出申请额度"的机型准备的）。
-	# ============================================================
 	if [ -e "$NODE" ]; then
 		echo 0 > "$NODE" 2>/dev/null
 		if [ "$(cat "$NODE" 2>/dev/null)" = "0" ]; then
-			DONE="交回 0（本机语义：不参与申请，原值 ${_cur_node:-未知} 已撤销）"
+			DONE="reset to 0 (stock idle; previous ${_cur_node:-unknown} cleared)"
 		fi
 	fi
-	# 写 0 失败时的次选：只用 ORIG 原值（若确实存在备份）
 	if [ -z "$DONE" ] && [ -s "$ORIG_FILE" ]; then
 		ORIG=$(cat "$ORIG_FILE" 2>/dev/null)
 		case "$ORIG" in
@@ -728,13 +704,13 @@ elif [ -z "$UNINST_RESTORE_BY" ]; then
 				if [ -e "$NODE" ]; then
 					echo "$ORIG" > "$NODE" 2>/dev/null
 					[ "$(cat "$NODE" 2>/dev/null)" = "$ORIG" ] && \
-						DONE="原始值 ${ORIG}（写 0 失败后的次选）"
+						DONE="original value ${ORIG} (fallback after reset-to-0 failed)"
 				fi
 				;;
 		esac
 	fi
 fi
-[ -n "$UNINST_RESTORE_BY" ] && DONE="模块 restore（对称还原）｜$UNINST_RESTORE_BY"
+[ -n "$UNINST_RESTORE_BY" ] && DONE="module restore (symmetric) | $UNINST_RESTORE_BY"
 
 # 最后兜底：仍不行才用常量（绝不写 0！）
 #
@@ -765,7 +741,7 @@ fi
 #   该节点是【申请额度】不是【强制电流】：最终给多少由 SOC/温度二次裁定
 #   （脚本别处注释已反复说明这一点）。额度偏高时系统会自己限住；
 #   额度偏低（如 4600）则是硬限速、没有任何自动补救 —— 两害相权取其轻。
-RESTORE_FALLBACK_MA=0    # ★ V2352A 本机适配：兜底改为「交回 0」，理由见下
+RESTORE_FALLBACK_MA=0    # V2507A: fallback resets to 0 (release VFCS_CLASS_EVENT)
 
 # ============================================================
 #  ★★★ V2352A 本机适配：兜底值从 9720 改为 0 ★★★
@@ -808,16 +784,16 @@ if [ -z "$DONE" ]; then
 	if [ -e "$NODE" ]; then
 		echo 0 > "$NODE" 2>/dev/null
 		if [ "$(cat "$NODE" 2>/dev/null)" = "0" ]; then
-			DONE="兜底交回 0（不参与申请，由系统自行裁定）"
+			DONE="fallback reset to 0 (released to system control)"
 		else
-			DONE="兜底写 0 失败（节点=$(cat "$NODE" 2>/dev/null)）"
+			DONE="fallback write 0 failed (node=$(cat "$NODE" 2>/dev/null))"
 		fi
 	else
-		DONE="节点不存在，无需交回"
+		DONE="node missing; nothing to restore"
 	fi
 fi
 
-echo "v2352a_charge_boost: 已卸载，交回系统方式 = ${DONE}" >> /data/adb/v2352a_charge_boost.log 2>/dev/null
+echo "v2507a_charge_boost: uninstalled, restore method = ${DONE}" >> /data/adb/v2507a_charge_boost.log 2>/dev/null
 
 # =============================================================================
 # =============================================================================
@@ -845,8 +821,8 @@ _vote_release() {
 		_cur=$(cat "$_d/force_active" 2>/dev/null)
 		if [ "$_cur" = "1" ]; then
 			echo 0 > "$_d/force_active" 2>/dev/null \
-				&& echo "v2352a_charge_boost: voter $_vt force_active 已解除" \
-				     >> /data/adb/v2352a_charge_boost.log 2>/dev/null
+				&& echo "v2507a_charge_boost: voter $_vt force_active released" \
+				     >> /data/adb/v2507a_charge_boost.log 2>/dev/null
 		fi
 	fi
 	return 0
@@ -860,7 +836,7 @@ _vote_release() {
 #   ② 漏了 USER_IBUS。默认注入目标是 USER_IBAT + USER_IBUS 两路，
 #      只放 USER_IBAT 会让 IBUS 的 force_active=1 残留。
 #      （正常路径下开头的 "$BOOST restore" 已覆盖，这里是 stop 失败时的兜底。）
-_pf="/data/adb/v2352a_charge_boost.profile"
+_pf="/data/adb/v2507a_charge_boost.profile"
 if [ -f "$_pf" ]; then
 	while IFS='=' read -r _k _v; do
 		case "$_k" in
@@ -888,7 +864,7 @@ _vote_release "USER_IBUS"
 #   safe_props_apply 跑过之后才被改。从没生效过的机器上卸载，
 #   这些写入纯属【把用户自己设的状态改掉】—— 卸载变成了改写。
 #   现在只在台账里确实记过该项时才还原。
-_g_orig=/data/adb/v2352a_charge_boost.guard_orig
+_g_orig=/data/adb/v2507a_charge_boost.guard_orig
 _g_cms=/sys/class/cms_class
 _g_get(){
 	[ -f "$_g_orig" ] || { echo ""; return; }
@@ -914,12 +890,12 @@ if [ -f "$_g_orig" ]; then
 	_g_gate=$(_g_get "cms.htccc_enable")
 	if [ -n "$_g_gate" ] && [ -f "$_g_cms/htccc_enable" ]; then
 		echo "$_g_gate" > "$_g_cms/htccc_enable" 2>/dev/null
-		echo "v2352a_charge_boost: 还原温控投票 htccc_enable=$_g_gate" \
-			>> /data/adb/v2352a_charge_boost.log 2>/dev/null
+		echo "v2507a_charge_boost: restored htccc_enable=$_g_gate" \
+			>> /data/adb/v2507a_charge_boost.log 2>/dev/null
 	fi
 else
-	echo "v2352a_charge_boost: 无防掉档台账，跳过场景/属性/温控投票还原（不做改写）" \
-		>> /data/adb/v2352a_charge_boost.log 2>/dev/null
+	echo "v2507a_charge_boost: no guard backup; skipping scene/prop/htccc restore" \
+		>> /data/adb/v2507a_charge_boost.log 2>/dev/null
 fi
 for _k in battery_charge_limit all_bypass_charge_support game_bypass_charge_flag \
           ai_charge_rate_support disable_intell_charge; do
@@ -930,8 +906,8 @@ for _k in battery_charge_limit all_bypass_charge_support game_bypass_charge_flag
 		continue
 	fi
 	setprop "persist.vivo.$_k" "$_o" 2>/dev/null
-	echo "v2352a_charge_boost: 还原属性 persist.vivo.$_k=$_o" \
-		>> /data/adb/v2352a_charge_boost.log 2>/dev/null
+	echo "v2507a_charge_boost: restored persist.vivo.$_k=$_o" \
+		>> /data/adb/v2507a_charge_boost.log 2>/dev/null
 done
 rm -f "$_g_orig" 2>/dev/null
 
@@ -940,44 +916,44 @@ rm -f "$_g_orig" 2>/dev/null
 #   存着上一轮完整的 emit_json 快照（含节点值/温度/开关）。若卸载不清，
 #   下次安装后 WebUI 在守护启动前会先读到这份过期快照，
 #   显示的是"上一次安装的旧状态"，看起来像"装了没生效"。
-rm -f /data/adb/v2352a_charge_boost.profile
-rm -f /data/adb/v2352a_charge_boost.orig
-rm -f /data/adb/v2352a_charge_boost.session
+rm -f /data/adb/v2507a_charge_boost.profile
+rm -f /data/adb/v2507a_charge_boost.orig
+rm -f /data/adb/v2507a_charge_boost.session
 # voter 台账与会话标记：同清（台账存的是"注入前的 force 原值"，
 #   留旧值会在下次安装时把过时值当成"当前原值"交回，写错）
-rm -f /data/adb/v2352a_charge_boost.vot_orig
-rm -f /data/adb/v2352a_charge_boost.vot_session
+rm -f /data/adb/v2507a_charge_boost.vot_orig
+rm -f /data/adb/v2507a_charge_boost.vot_session
 # ★ v3.5.11 补：votset 手动钉住目标的标记。
 #   旧版漏清 → 卸载后重装，守护一启动就沿用上次钉的目标，
 #   表现为"重装后行为与卸载前不一样"，且没有任何提示。
-rm -f /data/adb/v2352a_charge_boost.vot_target
+rm -f /data/adb/v2507a_charge_boost.vot_target
 # 高压体系标记：卸载即清，下次安装重新观察本机
-rm -f /data/adb/v2352a_charge_boost.highv
-rm -f /data/adb/v2352a_charge_boost.keys.tmp
+rm -f /data/adb/v2507a_charge_boost.highv
+rm -f /data/adb/v2507a_charge_boost.keys.tmp
 # 「临时解除加速」标记：卸载必清。
 #   【为什么要清】留着的話，用户卸载后重装，守护一启动就看到该标记 →
 #   撤掉干预后空转，表现为"装上就不工作"，极难排查。
-rm -f /data/adb/v2352a_charge_boost.paused
+rm -f /data/adb/v2507a_charge_boost.paused
 # 守护缓存（见上方说明）
-rm -f /data/adb/v2352a_charge_boost.status.json
-rm -f /data/adb/v2352a_charge_boost.status.json.tmp
+rm -f /data/adb/v2507a_charge_boost.status.json
+rm -f /data/adb/v2507a_charge_boost.status.json.tmp
 # ★ v3534：DT 表探测缓存。不清的话卸载后会在 /data/adb 留一个孤儿文件。
-rm -f /data/adb/v2352a_charge_boost.dtcache
-rm -f /data/adb/v2352a_charge_boost.dtcache.tmp
+rm -f /data/adb/v2507a_charge_boost.dtcache
+rm -f /data/adb/v2507a_charge_boost.dtcache.tmp
 # 进程残留
-rm -f /data/adb/v2352a_charge_boost.pid
-rm -rf /data/adb/v2352a_charge_boost.lock
-rm -f /data/adb/v2352a_charge_boost.baseline
-rm -f /data/adb/v2352a_charge_boost.capture
-rm -f /data/adb/v2352a_charge_boost.baseline.tmp.*
+rm -f /data/adb/v2507a_charge_boost.pid
+rm -rf /data/adb/v2507a_charge_boost.lock
+rm -f /data/adb/v2507a_charge_boost.baseline
+rm -f /data/adb/v2507a_charge_boost.capture
+rm -f /data/adb/v2507a_charge_boost.baseline.tmp.*
 
 # ★ v3528 补：日志文件本身与轮转备份。
 #   旧版只往 .log 里追加卸载记录，从不删除 —— 卸载后 /data/adb 会留下
 #   一份几十 KB 的孤儿日志（实测已积累 92KB），重装后还会接着写，
 #   日志里的"上一次安装"记录与本次混在一起，排查时极易误判。
-rm -f /data/adb/v2352a_charge_boost.log
-rm -f /data/adb/v2352a_charge_boost.log.1
-rm -f /data/adb/v2352a_charge_boost.log.old
+rm -f /data/adb/v2507a_charge_boost.log
+rm -f /data/adb/v2507a_charge_boost.log.1
+rm -f /data/adb/v2507a_charge_boost.log.old
 
 # ---- 3. 终局清扫：再杀一次守护与看门狗 ----
 #   【为什么开头杀过还要再杀】开头清扫与"解除注入/还原属性"之间隔着
@@ -990,7 +966,7 @@ for p in $(ps -A -o pid,args 2>/dev/null | awk '
 	case "$p" in ''|*[!0-9]*) continue ;; esac
 	kill -9 "$p" 2>/dev/null
 done
-rm -rf /data/adb/v2352a_charge_boost.lock
+rm -rf /data/adb/v2507a_charge_boost.lock
 
 # ---- 4. 最终校验：节点是否真的交回了 ----
 #   ★ v3530 修：原来这两行是 echo >> .log，但第 913 行刚刚才 rm -f 掉 .log，
@@ -998,20 +974,20 @@ rm -rf /data/adb/v2352a_charge_boost.lock
 #   下次重装后日志里根本没有「上一次是怎么卸的」——
 #   这正是排查「卸载后快充异常」时最缺的一条证据。
 #   现在改成先写，再重新落一份极简收尾日志（只留卸载结论，不保留历史噪音）。
-_TAIL_LOG="/data/adb/v2352a_charge_boost.uninstall.log"
+_TAIL_LOG="/data/adb/v2507a_charge_boost.uninstall.log"
 {
-	echo "==== $(date '+%Y-%m-%d %H:%M:%S') 模块卸载 ===="
-	echo "fchg_fcc_ma 最终值 = $(cat "$NODE" 2>/dev/null)"
-	echo "交回方式 = ${DONE}"
-	echo "判决层残留检查:"
+	echo "==== $(date '+%Y-%m-%d %H:%M:%S') module uninstall ===="
+	echo "fchg_fcc_ma final value = $(cat "$NODE" 2>/dev/null)"
+	echo "restore method = ${DONE}"
+	echo "residual voter check:"
 	for _t in DCHG_FCC USER_IBAT USER_INPUT USER_IBUS USB_ICL; do
 		_dd="/sys/kernel/debug/pmic-votable/$_t"
 		[ -d "$_dd" ] || continue
 		echo "  $_t fa=$(cat "$_dd/force_active" 2>/dev/null) fv=$(cat "$_dd/force_val" 2>/dev/null)"
 	done
-	echo "剩余运行时文件:"
-	ls /data/adb/v2352a_charge_boost.* 2>/dev/null | sed 's/^/  /'
-	echo "（以上应为空或仅剩本文件）"
+	echo "remaining runtime files:"
+	ls /data/adb/v2507a_charge_boost.* 2>/dev/null | sed 's/^/  /'
+	echo "(should be empty or contain only this log)"
 } > "$_TAIL_LOG" 2>/dev/null
 
 exit 0

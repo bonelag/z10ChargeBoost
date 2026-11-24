@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>充电加速控制台</title>
+<title>Charge Boost Console</title>
 <style>
 /* ============================================================
-   iQOO Z9 Turbo 充电加速 · 控制台样式（v3512 全量重构版）
+   iQOO Z10 Turbo+ 充电加速 · 控制台样式（V2507A 原生适配）
    ============================================================
    【为什么整份重写】
      原样式是两代 UI（旧 .card/.hero 体系 + 新 .mi-* 体系）叠加而成，
@@ -1675,11 +1675,11 @@ code{
 <div class="mi-head" id="miHead">
   <div class="mi-status" id="svcCard">
     <div style="flex:1;min-width:0">
-      <div class="mi-title" id="miTitle">读取中</div>
-      <div class="mi-sub" id="miSub">充电加速服务</div>
-      <!-- 保留给 JS 引用（老代码仍在写这两个元素） -->
+      <div class="mi-title" id="miTitle">Loading</div>
+      <div class="mi-sub" id="miSub">Charge Boost Service</div>
+      <!-- Keep element references for legacy JS updates -->
       <span class="dot2 ok" id="dotSvc" style="display:none"></span>
-      <span style="display:none"><b id="svcTxt">读取中</b></span>
+      <span style="display:none"><b id="svcTxt">Loading</b></span>
     </div>
     <!-- 状态圆环：底圈 + 进度圈 + 对勾/叉号
          【为什么用 SVG circle 的 stroke 画圆环】
@@ -1713,166 +1713,149 @@ code{
   <div class="whybar" id="whyBar" style="display:none"></div>
 
   <!-- ============================================================
-       机型适配卡 —— 明确告诉用户「这是给哪台机器改的」
-       ------------------------------------------------------------
-       【为什么放在最前面】同类包在不同机型上长得几乎一样，
-         用户第一眼必须能分清"我装的到底是哪一份"。
-         同时把本机三组真实硬件数字摆在明面上：
-           · 实际可达约 40W（80W 是充电器峰值，本机跑不到）
-           · DT 电流硬上限 14100mA
-           · 注入走 DCHG_FCC 单路（本机唯一真正的 mA 通道）
-           · 实际注入 = 总闸(14100) × 温度降额（97/91/81/72/63%）
-         这三个数是本包全部改动的依据，写出来比藏在注释里有用。
+       机型适配卡 —— iQOO Z10 Turbo+ (V2507A / MT6991) 原生适配
        ============================================================ -->
   <div class="mi-card devinfo">
     <div class="devinfo-head">
-      <span class="devinfo-badge">本机适配</span>
-      <span class="devinfo-title">iQOO Z9 Turbo</span>
+      <span class="devinfo-badge">Native</span>
+      <span class="devinfo-title">iQOO Z10 Turbo+</span>
     </div>
-    <div class="devinfo-sub">V2352A · 骁龙 8s Gen3 · Android 16</div>
+    <div class="devinfo-sub">V2507A · Dimensity 9400+ (MT6991) · Android 15</div>
     <div class="devinfo-grid">
       <div class="devinfo-cell">
-        <div class="devinfo-k">实际可达</div>
-        <div class="devinfo-v">40<small>W</small></div>
+        <div class="devinfo-k">Theoretical Peak</div>
+        <div class="devinfo-v">70<small>W</small></div>
       </div>
       <div class="devinfo-cell">
-        <div class="devinfo-k">电流上限</div>
-        <div class="devinfo-v"><span id="dvCap">14100</span><small>mA</small></div>
+        <div class="devinfo-k">Current Limit</div>
+        <div class="devinfo-v"><span id="dvCap">15600</span><small>mA</small></div>
       </div>
       <div class="devinfo-cell">
-        <div class="devinfo-k">注入通道</div>
+        <div class="devinfo-k">Inject Channel</div>
         <div class="devinfo-v devinfo-v-txt" id="dvChan">—</div>
       </div>
     </div>
   </div>
 
-  <!-- 主指标：功率 + 温度（对齐截图第二张卡） -->
+  <!-- Primary metrics: Power + Temp -->
   <div class="mi-hero">
     <div class="mi-hero-2col">
       <div class="col-l">
-        <div class="hl-k" id="pwLabel">电池功率</div>
+        <div class="hl-k" id="pwLabel">Battery Power</div>
         <div class="hl-v" id="vPower">—<small>W</small></div>
         <div class="hl-s" id="pSub">—</div>
       </div>
       <div class="col-r">
-        <div class="rk">电池温度</div>
+        <div class="rk">Battery Temp</div>
         <div class="rv" id="vTemp">—<small>°C</small></div>
-        <!-- 参考截图里温度下方直接是小字，没有进度条。
-             bTemp / barTemp 仍保留（JS 会引用），但视觉上不占位。 -->
+        <!-- Kept hidden for JS references -->
         <div class="mi-bar off" id="barTemp" style="display:none"><i id="bTemp" style="width:0%"></i></div>
-        <div class="rs" id="tSub">板级 — · 电池 —</div>
+        <div class="rs" id="tSub">Board — · Batt —</div>
       </div>
     </div>
   </div>
 
   <div class="mi-sec">
-    <span>实时监控</span>
+    <span>Live Monitor</span>
     <span class="upd" id="updTxt">—</span>
   </div>
 
   <div class="mi-card">
     <div class="mi-grid">
       <div class="cell">
-        <div class="ck">电量 SOC</div>
+        <div class="ck">Battery SOC</div>
         <div class="cv" id="vSoc">—<small>%</small></div>
         <div class="mi-bar off" id="barSoc" style="width:100%"><i id="bSoc" style="width:0%"></i></div>
       </div>
       <div class="cell">
-        <div class="ck">电池电压</div>
+        <div class="ck">Battery Volt</div>
         <div class="cv" id="vVbat">—<small>V</small></div>
       </div>
       <div class="cell">
-        <div class="ck">电池电流</div>
+        <div class="ck">Battery Curr</div>
         <div class="cv" id="vIbat">—<small>A</small></div>
       </div>
       <div class="cell">
-        <div class="ck">输入电压</div>
+        <div class="ck">Input Volt</div>
         <div class="cv" id="vChgV">—<small>V</small></div>
       </div>
     </div>
   </div>
 
-  <!-- 节点原始值（对齐截图底部那行小字） -->
+  <!-- Node & sensor metadata line -->
   <div class="hint" id="metaHint" style="margin:2px 6px 0">—</div>
 
   <!-- ============================================================
-       电流参数说明（v3525 回归原版模型）
-       ------------------------------------------------------------
-       原版界面上完全看不到自己到底注入多少，用户不知道为什么
-       功率卡在某个值。这里把三件事讲清楚：
-         ① 总闸（申请额度，默认 14100）
-         ② 温度降额（97/91/81/72/63%）
-         ③ 实际注入 = ① × ②
-       实际功率另受充电器档位（9V / 11V）与电池 SOC 降额限制。
+       Current parameters explanation (V2507A Native DT model)
        ============================================================ -->
   <div class="mi-card note">
     <div class="caprow" style="margin-bottom:7px">
-      <span class="caprow-k">本机 DT 上限</span>
-      <span class="caprow-v"><span id="capDt">14100</span> mA</span>
+      <span class="caprow-k">Device DT Limit</span>
+      <span class="caprow-v"><span id="capDt">15600</span> mA</span>
     </div>
     <div class="caprow" style="margin-bottom:7px">
-      <span class="caprow-k">当前总闸</span>
-      <span class="caprow-v"><span id="capNow">14100</span> mA<span class="caprow-x" id="capMode">申请额度</span></span>
+      <span class="caprow-k">Total Current Limit</span>
+      <span class="caprow-v"><span id="capNow">15600</span> mA<span class="caprow-x" id="capMode">Request Limit</span></span>
     </div>
     <div class="caprow" style="margin-bottom:9px">
-      <span class="caprow-k">温度降额后</span>
-      <span class="caprow-v"><span id="capW">14100</span> mA<span class="caprow-x">电池侧理论 ≈ <span id="capWin">63</span> W</span></span>
+      <span class="caprow-k">After Thermal Derate</span>
+      <span class="caprow-v"><span id="capW">15600</span> mA<span class="caprow-x">Batt peak ≈ <span id="capWin">70</span> W</span></span>
     </div>
     <div style="font-size:11px;color:var(--t3);line-height:1.6;padding-top:8px;border-top:1px solid var(--line)">
-      注入 = <b>总闸 × 温度降额</b>（97/91/81/72/63%）。<br>
-      <b>电池侧理论值不等于实际功率。</b>本机原装充电器实测约 <b>40W</b>；
-       换普通 9V 头只有 <b>25~27W</b>。差别全在充电器协议和线材。
+      Injected = <b>Limit × Thermal Derate</b> (97/91/81/72/63%).<br>
+      Directly overrides <b>DCHG_FCC</b> via <code>vfcs_class/fchg_fcc_ma</code>, bypassing stock thermal/screen-on limits;
+      actual output remains bounded by charger protocol (FlashCharge 15.6A / PPS 10A / UFCS 8A) and adapter PDO max.
     </div>
   </div>
 
-  <!-- JS 依赖的隐藏元素（data-lv / 进度条目标） -->
+  <!-- Hidden elements for JS state attributes -->
   <div id="mSoc" style="display:none"></div>
   <div id="mPower" style="display:none"></div>
   <div id="mTemp" style="display:none"></div>
 
-  <!-- ---------- 加速开关（临时解除 / 恢复）---------- -->
-  <div class="mi-sec">临时解除</div>
+  <!-- ---------- Boost Toggle (Temporary Pause / Resume) ---------- -->
+  <div class="mi-sec">Temporary Pause</div>
 
   <div class="mi-card">
     <div style="font-size:12.5px;color:var(--dim);line-height:1.6;margin-bottom:12px">
-      撤掉全部干预，但<b>不改配置</b>，重启后仍保持。适合临时插慢充 / 车载。
+      Clears all overrides while <b>keeping config</b> across reboots. Ideal for slow or car chargers.
     </div>
     <div class="mi-btn-row">
-      <button class="mi-btn" id="btnPause">临时解除加速</button>
-      <button class="mi-btn primary" id="btnResume">恢复加速</button>
+      <button class="mi-btn" id="btnPause">Pause Boost</button>
+      <button class="mi-btn primary" id="btnResume">Resume Boost</button>
     </div>
     <div id="pauseStat" class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.7;
          padding-top:10px;border-top:1px solid var(--card-3)"></div>
   </div>
 
-  <!-- ---------- 恢复原厂 + 诊断（合并）---------- -->
-  <div class="mi-sec">维护</div>
+  <!-- ---------- Restore Stock + Diagnostics ---------- -->
+  <div class="mi-sec">Maintenance</div>
 
   <div class="mi-card pad">
     <div style="font-size:12.5px;color:var(--dim);line-height:1.6;margin-bottom:12px">
-      恢复原厂：撤掉全部干预并停在原厂档，重启后不再干预。<b>不删配置、不卸模块</b>。<br>
-      与「临时解除」的区别 —— 之后要加速得重新选档。
+      Restore Stock: clears all overrides and switches to Stock profile (stays inactive after reboot). <b>Keeps config and module installed.</b><br>
+      Unlike Pause Boost, re-enabling boost requires selecting a profile again.
     </div>
-    <button class="mi-btn danger" id="btnRestore" style="width:100%">一键恢复原厂</button>
+    <button class="mi-btn danger" id="btnRestore" style="width:100%">Restore Stock</button>
 
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--card-3)">
       <div class="switchrow">
         <div>
-          <div style="font-size:13.5px;font-weight:600">记录运行日志</div>
+          <div style="font-size:13.5px;font-weight:600">Record Runtime Log</div>
           <div style="font-size:11.5px;color:var(--dim);margin-top:2px">
-            写入 /data/adb，超 256KB 自动轮转
+            Writes to /data/adb, auto-rotates at 256KB
           </div>
         </div>
         <div class="pillrow" id="logEnRow">
-          <button class="pill on" data-le="0" id="logEnOff">关闭</button>
-          <button class="pill"    data-le="1" id="logEnOn">开启</button>
+          <button class="pill on" data-le="0" id="logEnOff">Off</button>
+          <button class="pill"    data-le="1" id="logEnOn">On</button>
         </div>
       </div>
-      <button class="mi-btn" id="btnLogDump" style="width:100%;margin-top:12px">导出诊断包</button>
+      <button class="mi-btn" id="btnLogDump" style="width:100%;margin-top:12px">Export Debug Bundle</button>
       <div id="logDumpOut" style="font-size:12px;color:var(--dim);line-height:1.5;margin-top:8px;white-space:pre-wrap;word-break:break-all"></div>
 
-      <!-- ★ v3570：一键健康检查 -->
-      <button class="mi-btn primary" id="btnHealth" style="width:100%;margin-top:12px">检测运行占用</button>
+      <!-- ★ v3570：One-tap health check -->
+      <button class="mi-btn primary" id="btnHealth" style="width:100%;margin-top:12px">Check CPU / Health</button>
       <div id="healthOut" style="margin-top:10px"></div>
     </div>
   </div>
@@ -1880,56 +1863,53 @@ code{
 </div>
 
 <!-- ============================================================
-     第 2 页 · 档位（加速档位 + 电量分段电流）
-     【为什么合成一页】两者是同一件事的两面：档位决定"申请多大"，
-       分段电流决定"各电量段各申请多少"，而保存入口本来也是同一个
-       （STATE.dirty -> exec setcal）。放一起改完一次保存，不必跨页。
+     Page 2 · Profiles & Current Segments
      ============================================================ -->
 <div class="mi-page" id="page2">
 
-  <div class="mi-sec">加速档位</div>
+  <div class="mi-sec">Boost Profile</div>
 
   <div class="mi-card pad">
     <div class="mi-seg" id="gearSeg">
-      <button class="tab" data-a="1">激进<small>最快</small></button>
-      <button class="tab" data-a="2">温和<small>发热少</small></button>
-      <button class="tab" data-a="3">原厂<small>不加速</small></button>
+      <button class="tab" data-a="1">Aggressive<small>Fastest</small></button>
+      <button class="tab" data-a="2">Balanced<small>Cooler</small></button>
+      <button class="tab" data-a="3">Stock<small>Off</small></button>
     </div>
     <div class="hint" id="gearHint">
-      切档后约 2 秒生效。「原厂」档交回系统，之后要加速需重选档。<br>
-      只想临时停手 —— 用「首页」的临时解除。
+      Takes effect ~2s after switching. "Stock" hands control back; select a boost profile to re-enable.<br>
+      For temporary pause, use Pause Boost on Home.
     </div>
   </div>
 
-  <div class="mi-sec">电流参数</div>
+  <div class="mi-sec">Current Settings</div>
 
   <div class="mi-card pad">
     <div id="votHint" class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.6;margin-bottom:12px"></div>
 
     <div class="votrow">
-      <div class="votlabel">电流总闸<span class="votunit">mA</span></div>
+      <div class="votlabel">Total Current Limit<span class="votunit">mA</span></div>
       <input type="text" id="votIbat" inputmode="numeric" pattern="[0-9]*"
              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-             maxlength="5" min="1000" max="14100" step="100">
+             maxlength="5" min="1000" max="15600" step="100">
     </div>
     <div class="votnote">
-      注入值 = <b>总闸 × 温度降额</b>，不是固定电流。<br>
-      默认 <b id="votIbatDef">14100</b> mA = <b>本机 DT 标定</b>（充电 IC 的默认额度也是 14100）。<br>
-      <b>14100 × 4.45V ≈ 62.7W 只是电池侧理论天花板</b>，
-       实际功率由充电器协议决定 —— 原装头约 <b>40W</b>，普通 9V 头约 <b>25~27W</b>。
+      Injected = <b>Limit × Thermal Derate</b>, not a constant current.<br>
+      Default <b id="votIbatDef">15600</b> mA = <b>Device DT Calibration</b> (vivo,fchg-curr-max-ma = 15600).<br>
+      <b>15600 × 4.50V ≈ 70.2W is theoretical battery ceiling</b>;
+       actual power depends on adapter protocol & PDO max current.
     </div>
 
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--card-3)">
       <div class="switchrow">
         <div>
-          <div style="font-size:13.5px;font-weight:600">启用硬件直控</div>
+          <div style="font-size:13.5px;font-weight:600">Hardware Direct Control</div>
           <div style="font-size:11.5px;color:var(--dim);margin-top:2px">
-            由模块直接接管电流，不走系统申请通道
+            Takes over DCHG_FCC directly via vfcs_class (VFCS_CLASS_EVENT)
           </div>
         </div>
         <div class="pillrow" id="votModeRow">
-          <button class="pill on"  data-vm="0" id="votModeOff">关闭</button>
-          <button class="pill"     data-vm="1" id="votModeOn">开启</button>
+          <button class="pill on"  data-vm="0" id="votModeOff">Off</button>
+          <button class="pill"     data-vm="1" id="votModeOn">On</button>
         </div>
       </div>
     </div>
@@ -1938,143 +1918,117 @@ code{
   </div>
 
   <div class="mi-btn-row">
-    <button class="mi-btn primary" id="btnVotSave" disabled>保存</button>
+    <button class="mi-btn primary" id="btnVotSave" disabled>Save</button>
   </div>
 
-  <div class="mi-sec">分段电流</div>
+  <div class="mi-sec">Segment Currents</div>
 
   <div class="mi-card pad">
-    <!-- ============================================================
-         ★ v3537：电量分段电流表回归
-         ------------------------------------------------------------
-         【为什么之前被下线】v3526 时为了精简界面把它摘掉了，理由是
-           「降流是系统的策略，模块自己先降一档等于双重降流」。
-           这个理由本身没错，但它导致两条路一起被砍了：
-             · 想按电量细分控制的用户完全没入口
-             · set_cal 的 low/mid/peak/mid2/low2 变成只能靠命令行改
-         【现在为什么能回来】后端 target_current() 一直活着，五段值
-           始终参与 target_current() → min(段值, 总闸×降额) 的计算。
-           只是前端没有容器，buildTable() 因为拿不到 #tbody 直接 return。
-           所以这次是「纯前端补回」，后端一行没动、零风险。
-         【默认值为什么全是 14100】五个段默认同值 = 行为与之前完全一致
-           （等于只受总闸和温度降额约束）。想细分就让某段低一点，
-           那一段就按你的值走，其余照旧 —— 这是纯增量能力。
-         ============================================================ -->
     <div id="segHint" class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.6;margin-bottom:12px"></div>
 
     <table class="segtable">
       <thead>
         <tr>
-          <th>电量区间</th>
-          <th>申请电流</th>
+          <th>SOC Range</th>
+          <th>Request Current</th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
     </table>
 
     <div class="votnote" style="margin-top:12px">
-      实际注入 = <b>min(本段申请值, 总闸 × 温度降额)</b>。<br>
-      所以这里的值只可能让电流<b>变小</b>，永远不会突破总闸。<br>
-      五段全填同一个值 = 不做电量细分（推荐，交回系统裁定）。
+      Actual inject = <b>min(segment value, Limit × Thermal Derate)</b>.<br>
+      Segment values can only <b>reduce</b> current and never exceed the Total Limit.<br>
+      Setting all 5 equal = no per-SOC step-down (recommended).
     </div>
   </div>
 
   <div class="mi-btn-row">
-    <button class="mi-btn primary" id="btnSave" disabled>保存分段</button>
+    <button class="mi-btn primary" id="btnSave" disabled>Save Segments</button>
   </div>
 
-  <div class="mi-sec">实际注入值</div>
+  <div class="mi-sec">Effective Inject Value</div>
 
   <div class="mi-card pad">
     <div class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.7">
-      注入值由脚本自动算，<b>不需要你填</b>：<br>
-      <b>总闸 × 温度降额</b><br>
-      当前结果：<b id="segCapTxt2">—</b> mA
+      Calculated automatically by daemon (<b>no input needed</b>):<br>
+      <b>Total Limit × Thermal Derate</b><br>
+      Current result: <b id="segCapTxt2">—</b> mA
     </div>
   </div>
 
 </div>
 
 <!-- ============================================================
-     第 3 页 · 高级（温控）
+     Page 3 · Advanced (Thermal & Limits)
      ============================================================ -->
 <div class="mi-page" id="page3">
 
-  <div class="mi-sec">静态封顶</div>
+  <div class="mi-sec">Static Cap</div>
 
   <div class="mi-card pad">
     <div id="safeHint" class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.6;margin-bottom:12px"></div>
 
     <div class="votrow">
-      <div class="votlabel">静态封顶<span class="votunit">mA</span></div>
+      <div class="votlabel">Static Cap<span class="votunit">mA</span></div>
       <input type="text" id="safeCap" inputmode="numeric" pattern="[0-9]*"
              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-             maxlength="5" min="0" max="14100" step="100">
+             maxlength="5" min="0" max="15600" step="100">
     </div>
     <div class="votnote">
-      填 <b>0</b> = 不额外限制（推荐，让「总闸 × 温度降额」说了算）。
+      Enter <b>0</b> = no extra cap (recommended; governed by Limit × Thermal Derate).
     </div>
 
     <div id="safeStat" class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.7;
          padding-top:10px;border-top:1px solid var(--card-3)"></div>
   </div>
 
-  <div class="mi-sec">温控</div>
+  <div class="mi-sec">Thermal Control</div>
 
   <div class="mi-card pad">
     <div id="thermHint" class="dynhint" style="font-size:12px;color:var(--dim);line-height:1.6;margin-bottom:12px"></div>
 
     <div class="switchrow">
       <div>
-        <div style="font-size:13.5px;font-weight:600">启用温控</div>
+        <div style="font-size:13.5px;font-weight:600">Enable Thermal Control</div>
         <div style="font-size:11.5px;color:var(--dim);margin-top:2px">
-          关闭后温度不再影响电流，保护线全部失效
+          If disabled, temperature no longer throttles current
         </div>
       </div>
       <div class="pillrow" id="thermEnRow">
-        <button class="pill on" data-te="0" id="thermEnOff">关闭</button>
-        <button class="pill"    data-te="1" id="thermEnOn">开启</button>
+        <button class="pill on" data-te="0" id="thermEnOff">Off</button>
+        <button class="pill"    data-te="1" id="thermEnOn">On</button>
       </div>
     </div>
 
     <div class="votrow">
-      <div class="votlabel">开始降流<span class="votunit">板级 0.1℃</span></div>
+      <div class="votlabel">Throttle Start<span class="votunit">Board 0.1°C</span></div>
       <input type="text" id="thermStart" inputmode="numeric" pattern="[0-9]*"
              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
              maxlength="4" min="300" max="1000" step="5">
     </div>
     <div class="votrow">
-      <div class="votlabel">停止干预<span class="votunit">板级 0.1℃</span></div>
+      <div class="votlabel">Release Control<span class="votunit">Board 0.1°C</span></div>
       <input type="text" id="thermStop" inputmode="numeric" pattern="[0-9]*"
              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
              maxlength="4" min="300" max="1000" step="5">
     </div>
 
     <div class="votnote">
-      单位 0.1℃：650 = 65.0℃。默认 65.0℃ 开始降流、79.0℃ 停止干预。<br>
-      限的是<b>板级温度</b>；电池另有固定 40.5℃ 保护线，两路取更严重的一路。
+      Unit 0.1°C: 460 = 46.0°C. Defaults: 46.0°C start throttling, 54.0°C release.<br>
+      Caps <b>board temp</b>; battery has fixed 40.5°C protection (stricter wins).
     </div>
 
-    <!-- ============================================================
-         ★ v3536：停止介入电量（滑动条）
-         ------------------------------------------------------------
-         【为什么放在温控页】两者都是「什么时候收手」的策略开关，
-           放一起语义连贯；而且这样不用新增页面、不用改底部导航。
-         【形态为什么用 range 而不是数字框】
-           这个值只有 40~100 的整数，滑动条一步到位、带实时反馈，
-           比让用户敲数字再校验更顺手。旁边仍保留一个只读的大数字，
-           避免拖的时候还要去数刻度。
-         ============================================================ -->
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--card-3)">
       <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px">
-        <div style="font-size:13.5px;font-weight:600">停止介入电量</div>
+        <div style="font-size:13.5px;font-weight:600">Stop Boost SOC</div>
         <div id="socStopVal" style="font-size:20px;font-weight:700;color:var(--ok,#30a46c);
              font-variant-numeric:tabular-nums">90<span style="font-size:12px;
              font-weight:500;color:var(--dim);margin-left:1px">%</span></div>
       </div>
       <div style="font-size:11.5px;color:var(--dim);line-height:1.6;margin-bottom:10px">
-        充到这里之后，模块就不再干预，把控制权交回系统。<br>
-        拖到 <b>100%</b> = 一直管到满。
+        Hands control back to stock once battery level reaches this threshold.<br>
+        Drag to <b>100%</b> to manage through full charge.
       </div>
       <input type="range" id="socStop" min="40" max="100" step="1" value="90"
              style="width:100%;height:26px;margin:0;accent-color:var(--ok,#30a46c)">
@@ -2087,33 +2041,29 @@ code{
     </div>
 
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--card-3)">
-      <div style="font-size:12px;color:var(--dim);margin-bottom:6px">当前实际降额</div>
+      <div style="font-size:12px;color:var(--dim);margin-bottom:6px">Current Thermal Tiers</div>
       <div id="thermLvlList" class="dynhint" style="font-size:12.5px;line-height:1.8"></div>
     </div>
   </div>
 
   <div class="mi-btn-row">
-    <button class="mi-btn primary" id="btnSafeSave" disabled>保存</button>
+    <button class="mi-btn primary" id="btnSafeSave" disabled>Save</button>
   </div>
 
-  <!-- 版本页脚：只标机型适配，不含任何署名信息 -->
+  <!-- Footer -->
   <div class="credit">
-    <div class="credit-l1">iQOO Z9 Turbo（V2352A）</div>
-    <div class="credit-l2">本机适配版</div>
-    <div class="credit-l3">骁龙 8s Gen3（SM8635）· 充电加速<br>版本见模块详情页</div>
+    <div class="credit-l1">iQOO Z10 Turbo+ (V2507A)</div>
+    <div class="credit-l2">V2507A Native Edition</div>
+    <div class="credit-l3">Dimensity 9400+ (MT6991) · DCHG_FCC Direct<br>See module info for version</div>
   </div>
 
 </div>
-<!-- ============================================================
-     底部导航栏（3 分类：首页 / 充电 / 高级）
-     【交互】选中项：图标处呈橙色圆形高亮 + 白图标 + 橙色标签。
-     不再用"滑动白色滑块"—— 项多了滑块太窄反而显脏，圆形高亮也更贴合参考图。
-     ============================================================ -->
+<!-- Bottom navigation bar -->
 <div class="mi-nav">
   <div class="mi-nav-inner" id="navInner">
     <button class="mi-tab on" data-page="1">
       <span class="ic">
-        <!-- 首页：房子 -->
+        <!-- Home -->
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3.5 10.6 12 4l8.5 6.6"/>
@@ -2121,21 +2071,21 @@ code{
           <path d="M10.2 20v-5.4h3.6V20"/>
         </svg>
       </span>
-      <span class="lb">首页</span>
+      <span class="lb">Home</span>
     </button>
     <button class="mi-tab" data-page="2">
       <span class="ic">
-        <!-- 充电：闪电 -->
+        <!-- Charging -->
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M13.4 2.6 5.6 13.4h5.2l-.9 8 7.8-10.8h-5.2l.9-8z"/>
         </svg>
       </span>
-      <span class="lb">充电</span>
+      <span class="lb">Charging</span>
     </button>
     <button class="mi-tab" data-page="3">
       <span class="ic">
-        <!-- 高级：齿轮 -->
+        <!-- Advanced -->
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="7.2" y="7.2" width="9.6" height="9.6" rx="2.2"/>
@@ -2143,7 +2093,7 @@ code{
           <path d="M2.8 10h4.4M2.8 14h4.4M16.8 10h4.4M16.8 14h4.4"/>
         </svg>
       </span>
-      <span class="lb">高级</span>
+      <span class="lb">Advanced</span>
     </button>
 </div>
 </div>
@@ -2227,8 +2177,8 @@ function exec(cmd, timeoutMs){
 
 // 模块内主程序路径（两种可能的安装位置）
 var BIN_CANDIDATES = [
-  '/data/adb/modules/v2352a_charge_boost/system/bin/vfcs_boost',
-  '/data/adb/modules_update/v2352a_charge_boost/system/bin/vfcs_boost'
+  '/data/adb/modules/v2507a_charge_boost/system/bin/vfcs_boost',
+  '/data/adb/modules_update/v2507a_charge_boost/system/bin/vfcs_boost'
 ];
 var BIN = BIN_CANDIDATES[0];
 
@@ -2238,7 +2188,7 @@ var BIN = BIN_CANDIDATES[0];
 // （旧路径空闲 0.2s、充电时 2~5s，这正是"每次打开界面都要等一会"的主因）。
 // 缓存超过 CACHE_MAX_AGE 秒视为过期（守护未运行/刚装模块/stop 后），
 // 此时才回退完整 getjson 现场读取，正确性不受影响。
-var CACHE_FILE = '/data/adb/v2352a_charge_boost.status.json';
+var CACHE_FILE = '/data/adb/v2507a_charge_boost.status.json';
 var CACHE_MAX_AGE = 90;   // 秒。守护空闲态实测 41s 刷一次（3 轮 × (sleep10+1.3s)），
                           //   调小是为了"守护已停/刚装模块"时更快回退到现场直读，
                           //   避免拿着很久以前的快照显示成当前状态。
@@ -2424,12 +2374,12 @@ function askConfirm(msg, onOk, opt){
 
   var btnC = document.createElement('button');
   btnC.className = 'ask-btn';
-  btnC.textContent = opt.cancel || '取消';
+  btnC.textContent = opt.cancel || 'Cancel';
   btnC.onclick = function(){ close(); };
 
   var btnO = document.createElement('button');
   btnO.className = 'ask-btn' + (opt.danger ? ' danger' : ' primary');
-  btnO.textContent = opt.ok || '确定';
+  btnO.textContent = opt.ok || 'Confirm';
   btnO.onclick = function(){
     close();
     if (typeof onOk === 'function') onOk();
@@ -2472,7 +2422,7 @@ function segLabel(b, key){
   return m[key] || key;
 }
 var SEG_KEYS  = ['low','mid','peak','mid2','low2'];
-var SEG_NAMES = ['低电量段','中低段','中段','中高段','高电量段'];
+var SEG_NAMES = ['Low SOC','Mid-Low','Mid SOC','Mid-High','High SOC'];
 
 // 当前 SOC 属于哪一段
 function curSeg(soc, b){
@@ -2540,10 +2490,10 @@ function setServiceState(st){
   var txt   = $('svcTxt');
 
   var T = {
-    run:  ['工作中',   'st-ok',   'on',  '运行中'],
-    stop: ['已停止',   'st-idle', 'off', '已停止'],
-    idle: ['待机',     'st-idle', 'off', '待机'],
-    bad:  ['连接失败', 'st-bad',  'off', '连接失败']
+    run:  ['Active',     'st-ok',   'on',  'Running'],
+    stop: ['Stopped',    'st-idle', 'off', 'Stopped'],
+    idle: ['Standby',    'st-idle', 'off', 'Standby'],
+    bad:  ['Conn Error', 'st-bad',  'off', 'Failed']
   }[st] || ['—', 'st-idle', 'off', '—'];
 
   setText('miTitle', T[0]);
@@ -2610,8 +2560,8 @@ function renderMonitor(d){
   var pw = d.power;
 
   if (!isCharging){
-    setHTML('vPower', '待机');
-    setText('pSub', '未连接充电器');
+    setHTML('vPower', 'Idle');
+    setText('pSub', 'Charger unplugged');
     setAttr('mPower', 'data-lv', '');
   } else if (pw === null || pw === undefined){
     setHTML('vPower', '—<small>W</small>');
@@ -2622,16 +2572,16 @@ function renderMonitor(d){
     setHTML('vPower', pwTxt + '<small>W</small>');
     pulseIfChanged('pw', $('vPower'), pwTxt);
     setAttr('mPower', 'data-lv', pwW >= 35 ? 'hi' : (pwW >= 20 ? 'mid' : 'lo'));
-    setText('pSub', d.powerSrc === 'in' ? '输入侧实测' : '电池侧实测');
+    setText('pSub', d.powerSrc === 'in' ? 'Input measured' : 'Batt measured');
   }
 
-  // ---- 温度（双源）----
+  // ---- Temp (dual source) ----
   var tb = (d.tempBoard === null || d.tempBoard === undefined) ? null : d.tempBoard / 10;
   var tc = (d.tempBatt  === null || d.tempBatt  === undefined) ? null
          : (d.temp && d.tempBoard === undefined ? d.temp / 10 : d.tempBatt / 10);
   if (tb === null && tc === null && d.temp !== null && d.temp !== undefined){ tb = d.temp / 10; }
-  setText('tSub', '板级 ' + (tb === null ? '—' : tb.toFixed(1) + '°C')
-                 + ' · 电池 ' + (tc === null ? '—' : tc.toFixed(1) + '°C'));
+  setText('tSub', 'Board ' + (tb === null ? '—' : tb.toFixed(1) + '°C')
+                 + ' · Batt ' + (tc === null ? '—' : tc.toFixed(1) + '°C'));
 
   if (tb === null && tc === null){
     setHTML('vTemp', '—<small>°C</small>');
@@ -2680,34 +2630,31 @@ function renderMonitor(d){
   } else {
     var sign = ia > 0 ? '+' : '';
     var iaTxt = ia.toFixed(2);
-    var tag = ia > 0.05 ? '充' : (ia < -0.05 ? '放' : '');
+    var tag = ia > 0.05 ? 'Chg' : (ia < -0.05 ? 'Dis' : '');
     setHTML('vIbat', sign + iaTxt + '<small>A</small>' + (tag ? '<i class="cvtag">' + tag + '</i>' : ''));
     pulseIfChanged('ibat', $('vIbat'), sign + iaTxt + tag);
   }
   setHTML('vChgV', fmt(d.chgV, 1000, 2) + '<small>V</small>');
 
-  // ---- 底部信息行 ----
+  // ---- Bottom metadata row ----
   var bits = [];
-  bits.push('节点 ' + (d.node === null ? '—' : d.node + ' mA'));
-  if (d.ibus !== null) bits.push('输入 ' + Math.round(d.ibus) + ' mA');
-  if (d.ocv !== null)  bits.push('OCV整包 ' + Math.round(d.ocv / 1000) + ' mV');
-  if (d.vfloat !== null) bits.push('vfloat单芯 ' + Math.round(d.vfloat) + ' mV');
+  bits.push('Node ' + (d.node === null ? '—' : d.node + ' mA'));
+  if (d.ibus !== null) bits.push('In ' + Math.round(d.ibus) + ' mA');
+  if (d.ocv !== null)  bits.push('OCV pack ' + Math.round(d.ocv / 1000) + ' mV');
+  if (d.vfloat !== null) bits.push('vfloat cell ' + Math.round(d.vfloat) + ' mV');
   if (d.thermState !== null){
-    var ts = ['正常','预警','降档A','降档B','已交回系统'][d.thermState];
-    if (ts) bits.push('热保护 ' + ts);
+    var ts = ['Normal','Warn','Step A','Step B','Stock Control'][d.thermState];
+    if (ts) bits.push('Thermal ' + ts);
   }
   setHTML('metaHint', bits.join(' · ').replace(/</g,'&lt;'));
 
-  // ---- 更新时间与数据来源 ----
-  //   【为什么要标注来源】这个钟点是"界面这次刷新"的时刻，而首屏用的是
-  //   本地快照、缓存超龄时会先用旧值 —— 不加标注的话，用户会把几小时前的
-  //   旧数据当成刚刚的真实读数。标注后一眼可辨，且真实数据一到就自动去掉。
+  // ---- Timestamp & data source ----
   var now = new Date();
   var lbl = ('0' + now.getHours()).slice(-2) + ':' +
             ('0' + now.getMinutes()).slice(-2) + ':' +
             ('0' + now.getSeconds()).slice(-2);
-  if (d && d._src === 'snap')       lbl += ' · 上次数据，刷新中';
-  else if (d && d._src === 'stale') lbl += ' · 缓存数据，刷新中';
+  if (d && d._src === 'snap')       lbl += ' · Last snapshot, updating';
+  else if (d && d._src === 'stale') lbl += ' · Cached data, updating';
   setText('updTxt', lbl);
 }
 
@@ -2716,7 +2663,7 @@ function renderFactory(d){
   var box = $('capbox');
   if (!box) return;
 
-  // DT 读取成功时不打扰用户（正常情况），只在失败时提示
+  // Silent when DT read succeeded
   if (d.factorySrc === 'dt'){
     box.style.display = 'none';
     box.innerHTML = '';
@@ -2727,20 +2674,19 @@ function renderFactory(d){
   box.innerHTML = '';
 
   var line1 = document.createElement('div');
-  line1.innerHTML = '<b>原厂档：未能读取设备树档位表</b>';
+  line1.innerHTML = '<b>Stock profile: DT segment table unreadable</b>';
   box.appendChild(line1);
 
   var step = document.createElement('div');
   step.className = 'capstep';
   step.textContent =
-    '模块会改用「写入前备份的节点原值」作为原厂档；' +
-    '若备份也取不到，则使用安全值。加速功能不受影响，' +
-    '只是「原厂档」按钮交回系统时用的值可能不是本机出厂值。';
+    'Using the pre-intervention backed-up node value (or safe fallback) when restoring Stock. ' +
+    'Charging boost is unaffected, though the Stock restore current may differ from factory default.';
   box.appendChild(step);
 
   var tip = document.createElement('div');
   tip.className = 'capstep';
-  tip.textContent = '可用命令行排查：sh ' + BIN + ' factory raw';
+  tip.textContent = 'Troubleshoot via CLI: sh ' + BIN + ' factory raw';
   box.appendChild(tip);
 }
 
@@ -2749,23 +2695,21 @@ function renderWhy(d){
   if (!bar) return;
 
   var why = d.whyInactive;
-  // 老后端没有这个字段 -> 不显示，避免误报
   if (why === undefined || why === null || why === ''){
     bar.style.display = 'none';
     bar.innerHTML = '';
     return;
   }
 
-  // 满电是最常见的场景，单独加一句"怎么做"的引导
   var extra = '';
   if (d.soc !== null && d.soc !== undefined && d.bounds &&
       d.soc > d.bounds.max){
-    extra = ' 想让改动立即生效，可先放电到 ' + d.bounds.max +
-            '% 以下再接充电器。';
+    extra = ' Discharge below ' + d.bounds.max +
+            '% before replugging to apply immediately.';
   }
 
   bar.style.display = '';
-  bar.innerHTML = '<span class="wi">提示</span><span>' +
+  bar.innerHTML = '<span class="wi">Tip</span><span>' +
                   escapeHtml(why) + escapeHtml(extra) + '</span>';
 }
 
@@ -2789,26 +2733,24 @@ function renderTabs(d){
     var a = parseInt(tabs[i].getAttribute('data-a'), 10);
     setElClass(tabs[i], 'tab' + (a === d.active ? ' on' : ''));
   }
-  var names = {1:'激进', 2:'温和', 3:'原厂'};
+  var names = {1:'Aggressive', 2:'Balanced', 3:'Stock'};
 
   var capTxt = '';
   if (d.calMax !== null && d.calMax !== undefined && Number(d.calMax) > 0){
     var _mx = Number(d.calMax);
     var _dt = (d.calDt !== null && d.calDt !== undefined) ? Number(d.calDt) : 0;
     if (_dt > 0 && _dt !== _mx){
-      // 允许值高于 DT 声明值时，两个数都显示 —— 否则用户会疑惑
-      // "驱动只写了 14100，凭什么界面让我填 15600"。
-      capTxt = '（上限 ' + _mx + ' mA · DT ' + _dt + ' mA）';
+      capTxt = ' (Max ' + _mx + ' mA · DT ' + _dt + ' mA)';
     } else {
-      capTxt = '（上限 ' + _mx + ' mA）';
+      capTxt = ' (Max ' + _mx + ' mA)';
     }
   }
 
   if (d.active === 3){
-    setText('gearHint', '原厂档：已交回系统控制。');
+    setText('gearHint', 'Stock profile: handed back to system.');
   } else {
     setText('gearHint',
-      '当前「' + (names[d.active] || d.active) + '」档。' + capTxt);
+      'Active profile: "' + (names[d.active] || d.active) + '".' + capTxt);
   }
 }
 
@@ -2827,7 +2769,7 @@ function buildTable(d){
   // 【兼容兜底】如果后端是旧版本（没有 calMax / calDanger 字段），
   // 用合理默认值顶上，避免输入框失去上限约束。
   // 这种"前端比后端新"的情况在刷了 WebUI 但没重装模块时会出现。
-  if (d.calMax === null || d.calMax === undefined) d.calMax = 14100;
+  if (d.calMax === null || d.calMax === undefined) d.calMax = 15600;
   if (d.calDanger === null || d.calDanger === undefined) d.calDanger = 3000;
 
   for (var i = 0; i < SEG_KEYS.length; i++){
@@ -3004,35 +2946,35 @@ function onInput(ev){
   if (raw === ''){ this.className = ''; setBadge(key, ''); return; }
 
   var n = parseInt(raw, 10);
-  if (isNaN(n)){ this.className = 'danger'; setBadge(key, '无效'); return; }
+  if (isNaN(n)){ this.className = 'danger'; setBadge(key, 'Invalid'); return; }
 
   var cap = parseInt(d.calMax, 10);
-  if (isNaN(cap) || cap <= 0) cap = 14100;    // 后端没给上限时按本机 DT 兜底
+  if (isNaN(cap) || cap <= 0) cap = 15600;    // Fallback to device DT max if missing
   var danger = parseInt(d.calDanger, 10);
   if (isNaN(danger)) danger = 0;
   var validList = (typeof d.valid === 'string') ? d.valid.split(/\s+/) : [];
 
-  // 越界钳制提示（不自动改值，避免用户打字时被抢改）
+  // Out-of-range hint (do not overwrite while typing)
   if (n < 0 || n > cap){
     this.className = 'danger';
-    setBadge(key, '超出 0~' + cap);
+    setBadge(key, 'Exceeds 0~' + cap);
   } else if (n < danger){
     this.className = 'danger';
-    setBadge(key, n === 0 ? '会停止充电' : '功率会掉到约13W');
+    setBadge(key, n === 0 ? 'Stops charging' : 'Drops to ~13W');
   } else if (validList.length && validList.indexOf(String(n)) < 0){
     this.className = 'changed';
-    setBadge(key, '非实测台阶');
+    setBadge(key, 'Non-DT step');
   } else {
     var cur = parseInt(d.cal ? d.cal[key] : NaN, 10);
     this.className = (n === cur) ? '' : 'changed';
     setBadge(key, '');
   }
 
-  // 同步到 dirty（这样"保存"按钮的计数实时更新）
+  // Sync dirty count on Save button
   syncDirty();
 }
 
-// 失焦时做一次钳制：把明显非法的内容恢复成原值
+// Clamp & revert clearly invalid values on blur
 function onInputBlur(ev){
   var key = this.getAttribute('data-seg');
   var d = STATE.data;
@@ -3043,17 +2985,17 @@ function onInputBlur(ev){
   if (raw !== this.value) this.value = raw;
   var n = parseInt(raw, 10);
   var cap = parseInt(d.calMax, 10);
-  if (isNaN(cap) || cap <= 0) cap = 14100;
+  if (isNaN(cap) || cap <= 0) cap = 15600;
 
   if (raw === '' || isNaN(n) || n < 0 || n > cap){
-    // 非法 -> 恢复成当前生效值，并提示
+    // Invalid -> revert to active value & notify
     var orig = (STATE.dirty && STATE.dirty[key]) ? STATE.dirty[key]
              : (d.cal ? d.cal[key] : '');
     if (orig !== '' && orig !== undefined && orig !== null) this.value = String(orig);
     this.className = '';
     setBadge(key, '');
     syncDirty();
-    if (raw !== '') noticeOnce('数值需在 0~' + cap + ' 之间，已还原');
+    if (raw !== '') noticeOnce('Value must be 0~' + cap + '; reverted');
   }
 }
 
@@ -3089,13 +3031,13 @@ function syncDirty(){
   var b = $('btnSave');
   if (b){
     b.disabled = !STATE.editing;
-    b.textContent = STATE.editing ? ('保存修改 (' + cnt + ')') : '保存修改';
+    b.textContent = STATE.editing ? ('Save Segments (' + cnt + ')') : 'Save Segments';
   }
 }
 
 function buildPlaceholderTable(){
   var tb = $('tbody');
-  if (!tb) return;          // ★ v3526：分段表 UI 已下线
+  if (!tb) return;
   tb.innerHTML = '';
   var b = {min:5, t1:45, t2:60, t3:65, t4:75, max:84};
   for (var i = 0; i < SEG_KEYS.length; i++){
@@ -3108,7 +3050,7 @@ function buildPlaceholderTable(){
     tr.appendChild(td1);
 
     var td2 = document.createElement('td');
-    td2.innerHTML = '<span style="color:var(--dim)">加载中…</span>';
+    td2.innerHTML = '<span style="color:var(--dim)">Loading...</span>';
     tr.appendChild(td2);
 
     tb.appendChild(tr);
@@ -3116,7 +3058,7 @@ function buildPlaceholderTable(){
 }
 
 
-// 高亮当前 SOC 所在的段
+// Highlight current SOC segment
 function markCurSeg(d){
   var seg = curSeg(d.soc, d.bounds);
   var tds = document.querySelectorAll('.seg');
@@ -3126,18 +3068,9 @@ function markCurSeg(d){
   }
 }
 
-// ============================================================
-// ============================================================
-//  【设计要点】与段位表完全独立的一套 dirty/保存流程。
-//   原因：段位表存的是"申请额度"，voter 存的是"判决层强制值"，
-//   两者校验规则不同（段位不能超 calMax，voter 下限 1000 上限 11500），
-//   混进同一套 dirty 会让提示文案互相干扰。
-// ★ v3528：温度门限输入框已并入「温控」页（thermStart / thermStop），
-//   直控侧只保留「电流总闸」一个输入。这里同步收窄，避免每轮轮询去遍历
-//   5 个已不存在的元素（有 el 判空不会崩，但纯属空转）。
 var VOT_KEYS = ['votIbat'];
 var VOT_TITLES = {
-  votIbat:'电流总闸'
+  votIbat:'Total Current Limit'
 };
 // 键名 -> setcal 的段名
 var VOT_SEG = {
@@ -3156,17 +3089,13 @@ var VOT_JSONKEY = {
   votT3:'t3',   votT4:'t4', votT5:'t5'
 };
 var VOT_DEFAULTS = {
-  // ★ v3530：总闸默认值改回【本机 DT 标定 14100】。
-  //   依据：本机 calDt=14100，且充电 IC 硬件默认额度就是 FCHG_DEFAULT_EVENT
-  //   v=14100 —— 14100 是本机自己声明的额度，不是外来常量。
-  //   9000 是其他机型（X200 Pro）的值，对本机只用到 64%（40W / 62.7W）。
-  //   理论换算：14100 × 4.45V = 62.7W 电池侧。
-  votIbat:14100, votT1:340, votT2:346, votT3:401, votT4:450, votT5:500
+  // V2507A 原生 DT 标定：15600mA，板级温控曲线 46.0~54.0℃
+  votIbat:15600, votT1:460, votT2:480, votT3:500, votT4:520, votT5:540
 };
 
-// 总闸默认值：本机 DT 标定 14100。
+// 总闸默认值：本机 DT 标定 15600。
 function defVotIbat(){
-  return 14100;
+  return 15600;
 }
 
 STATE.votDirty = null;   // {key: value}
@@ -3184,41 +3113,35 @@ function renderVoter(d){
   var hint = $('votHint');
 
   if (!v){
-    if (hint) hint.innerHTML = '<b>本版本不含硬件直控</b><br>' +
-      '后端未返回硬件直控状态，请确认已刷入 v3.5.11 及以上版本。';
+    if (hint) hint.innerHTML = '<b>Direct control not available in this version</b><br>' +
+      'Backend did not return direct-control status; flash v3.5.11+.';
     setVoterDisabled(true);
     return;
   }
 
-  // ---- 可用性提示 ----
+  // ---- Availability hint ----
   if (v.ready){
-    // 控制对象：v3545 起改为 DCHG_FCC 单路（本机唯一真正的 mA 通道）。
-    // 只有你在 root 终端用 votset 手动钉住时才会是一个别的名字，
-    // 所以这里按名字逐个翻译，认不出来的名字原样显示。
     var VOT_TGT_NAME = {
-      'DCHG_FCC':'充电额度（mA）', 'USER_FCC':'充电额度',
-      'USER_IBAT':'电池电流（百分比域，已弃用）', 'USER_IBUS':'输入总线',
-      'USER_INPUT':'输入侧（百分比域，已弃用）', 'USB_ICL':'输入限流'
+      'DCHG_FCC':'Charge limit (mA)', 'USER_FCC':'Charge limit',
+      'USER_IBAT':'Batt current (% domain, deprecated)', 'USER_IBUS':'Input bus',
+      'USER_INPUT':'Input side (% domain, deprecated)', 'USB_ICL':'Input limit'
     };
     var tgtRaw = String(v.target || '').replace(/\s+/g, ' ').replace(/^ | $/g, '');
     var tgtName = tgtRaw ? tgtRaw.split(' ').map(function(n){
       return VOT_TGT_NAME[n] || n;
-    }).join(' + ') : '未解析';
-    // ★ v3.5.11：tgtRaw / tgtName 一律转义。
-    //   这一页手里握着 ksu.exec（任意 root 执行），任何未转义的内插
-    //   都是"能执行 root 的 XSS"。数据源虽是本机守护，但 votset 允许
-    //   手动钉任意目标名，votdiag 会把 votable 目录下的名字原样吐出 ——
-    //   那已经不完全是可信常量了。
-    hint.innerHTML = '<b style="color:var(--ok,#30a46c)">✓ 本机支持硬件直控</b><br>' +
-      '控制对象：<b>' + escapeHtml(tgtName) + '</b>' +
-      (tgtRaw && tgtRaw !== tgtName ? '（' + escapeHtml(tgtRaw) + '）' : '') +
-      '，总闸 ' + escapeHtml(v.ibat) + ' mA。' +
-      (v.mode ? '<br><b style="color:var(--warn,#d97706)">直控已开启</b>' : '');
+    }).join(' + ') : 'unresolved';
+    var devSysfs = (d && d.dev && d.dev.class === 'mtk');
+    hint.innerHTML = '<b style="color:var(--ok,#30a46c)">✓ Hardware Direct Control supported' +
+      (devSysfs ? ' (vfcs_class → DCHG_FCC)' : '') + '</b><br>' +
+      'Target: <b>' + escapeHtml(tgtName) + '</b>' +
+      (tgtRaw && tgtRaw !== tgtName ? ' (' + escapeHtml(tgtRaw) + ')' : '') +
+      ', Limit ' + escapeHtml(v.ibat) + ' mA.' +
+      (v.mode ? '<br><b style="color:var(--warn,#d97706)">Direct control ON</b>' : '');
     setVoterDisabled(false);
   } else {
-    hint.innerHTML = '<b style="color:var(--danger,#e5484d)">✗ 本机不支持硬件直控</b><br>' +
-      escapeHtml(v.why || '未知原因') +
-      '<br><span style="opacity:.75">架构差异，非故障。</span>';
+    hint.innerHTML = '<b style="color:var(--danger,#e5484d)">✗ Hardware Direct Control unsupported</b><br>' +
+      escapeHtml(v.why || 'Unknown reason') +
+      '<br><span style="opacity:.75">Architectural difference, not an error.</span>';
     setVoterDisabled(true);
   }
 
@@ -3294,15 +3217,15 @@ function bindLogEnRow(){
       exec('sh "' + BIN + '" setcal log_en ' + val, 15000).then(function(r){
         var s = String((r && r.stdout) || '');
         if (r && r.code === 0 && s.indexOf('OK') === 0){
-          toast(val ? '已开始记录日志' : '已停止记录日志', val ? 'ok' : 'hot');
+          toast(val ? 'Runtime logging enabled' : 'Runtime logging disabled', val ? 'ok' : 'hot');
           if (STATE.data) STATE.data.logEn = val;
         } else {
           var err = s || ((r && r.stderr) ? r.stderr : '') || ('code ' + (r ? r.code : '?'));
-          toast('切换失败：' + err.trim(), 'err');
+          toast('Toggle failed: ' + err.trim(), 'err');
           renderLogEn(STATE.data);
         }
       }).catch(function(e){
-        toast('切换失败：' + (e && e.message ? e.message : e), 'err');
+        toast('Toggle failed: ' + (e && e.message ? e.message : e), 'err');
         renderLogEn(STATE.data);
       });
     });
@@ -3343,9 +3266,9 @@ function calcEffCap(d){
   if (dt > 0){
     cur = oc ? Math.max(dt, ocMax) : dt;
   } else {
-    cur = (d && d.calMax !== null && d.calMax !== undefined) ? Number(d.calMax) : 14100;
+    cur = (d && d.calMax !== null && d.calMax !== undefined) ? Number(d.calMax) : 15600;
   }
-  if (!(cur > 0)) cur = 14100;
+  if (!(cur > 0)) cur = 15600;
   return cur;
 }
 
@@ -3370,15 +3293,10 @@ function renderOc(d){
   if (d && d.voter && d.voter.ibat !== null && d.voter.ibat !== undefined){
     ibat = Number(d.voter.ibat);
   }
-  if (!(ibat > 0)) ibat = (d && d.ibatDefault) ? Number(d.ibatDefault) : 14100;
-  if (!(ibat > 0)) ibat = 14100;
+  if (!(ibat > 0)) ibat = (d && d.ibatDefault) ? Number(d.ibatDefault) : 15600;
+  if (!(ibat > 0)) ibat = 15600;
 
   // 温度降额：与后端 vot_temp_cap 同源（97/91/81/72/63%）。
-  //   字段来源：后端 JSON 的 voter.t1..t5（门限，0.1℃）、
-  //             voter.pct1/pct2/pct3/pct4/pctFloor（百分比）、
-  //             tempBatt（电池温度 0.1℃，没有就用 tempBoard）。
-  //   这里必须用后端下发的门限，不能在前端写死 340/346/401/450/500 ——
-  //   用户在界面上改过门限后，前端自己算会和模块实际注入值对不上。
   var tv = d && d.voter ? d.voter : null;
   var tempNow = 0;
   if (d && d.tempBatt !== null && d.tempBatt !== undefined && Number(d.tempBatt) > 0){
@@ -3388,8 +3306,8 @@ function renderOc(d){
   }
   var pct = 100;
   if (tv){
-    var T1 = Number(tv.t1||340), T2 = Number(tv.t2||346), T3 = Number(tv.t3||401);
-    var T4 = Number(tv.t4||450), T5 = Number(tv.t5||500);
+    var T1 = Number(tv.t1||460), T2 = Number(tv.t2||480), T3 = Number(tv.t3||500);
+    var T4 = Number(tv.t4||520), T5 = Number(tv.t5||540);
     var P1 = Number(tv.pct1||97), P2 = Number(tv.pct2||91), P3 = Number(tv.pct3||81);
     var P4 = Number(tv.pct4||72), PF = Number(tv.pctFloor||63);
     if (tempNow >= T5) pct = PF;
@@ -3404,8 +3322,10 @@ function renderOc(d){
   setText('capNow', String(ibat));
   if (dt > 0) setText('capDt', String(dt));
   setText('capW', String(effI));
-  // 电池侧功率（4.45V 折算），仅作量级参考
-  setText('capWin', (effI * 4.45 / 1000).toFixed(0));
+  // 电池侧理论功率（优先用后端 vfloat，否则按 4.50V 折算），仅作量级参考
+  var vfV = (d && d.vfloat && Number(d.vfloat) >= 2500 && Number(d.vfloat) <= 6000)
+    ? (Number(d.vfloat) / 1000) : 4.50;
+  setText('capWin', (effI * vfV / 1000).toFixed(0));
   // 机型卡「电流上限」格：显式展示硬件上限（不是注入值）
   if (dt > 0) setText('dvCap', String(dt));
   else if (cur > 0) setText('dvCap', String(cur));
@@ -3416,8 +3336,8 @@ function renderOc(d){
   //   现在取 voter.target 的第一个名字，取不到就显示「未启用」。
   var _chOne = (d && d.voter && d.voter.target)
     ? String(d.voter.target).split(/\s+/).filter(Boolean)[0] : '';
-  setText('dvChan', _chOne || '未启用');
-  var modeTxt = oc ? '可填至 ' + ocMax : 'DT 标定 ' + (dt > 0 ? dt : cur);
+  setText('dvChan', _chOne || 'Disabled');
+  var modeTxt = oc ? 'Max ' + ocMax : 'DT spec ' + (dt > 0 ? dt : cur);
   if ($('capMode')) $('capMode').textContent = modeTxt;
 
   // 第 2 页「实际注入值」
@@ -3427,38 +3347,27 @@ function renderOc(d){
   var vi = $('votIbat');
   if (vi && cur > 0){
     vi.setAttribute('max', String(cur));
-    // ★ v3530：总闸默认值是本机 DT 标定 14100。
-    vi.setAttribute('placeholder', '14100');
+    vi.setAttribute('placeholder', '15600');
   }
-  setText('votIbatDef', '14100');
+  setText('votIbatDef', '15600');
 
   // 静态封顶输入框的 max
   var sc = $('safeCap');
   if (sc && cur > 0) sc.setAttribute('max', String(cur));
 }
 
-// voter 输入校验 + 记 dirty
-// ★ v3578：输入过程中只标红不弹窗、不重建 DOM；越界提示统一挪到 blur。
-//   原因见「输入框 × 输入法共存层」：打字中间态（1/14/141/1410）必然越界，
-//   每敲一下弹一次 toast 就是和输入法打架。
 function votRange(key){
   if (key === 'votIbat'){
-    //   ★ v3528：电量分段表 UI 已下线，querySelector('input[data-seg]')
-    //     永远取不到元素 —— 旧逻辑会退到写死的 15600，而本机实际上限是
-    //     calDt（14100）。现在直接从后端 JSON 取：
-    //       oc=0 → calDt（本机 DT 标定）
-    //       oc=1 → max(calDt, calOcMax)
-    //     与 calcEffCap / renderOc 完全同源，避免三处上限各自漂移。
     var cap = calcEffCap(STATE.data);
-    if (!(cap > 0)) cap = 14100;
+    if (!(cap > 0)) cap = 15600;
     if (cap > 20000) cap = 20000;
     return {
       lo: 1000, hi: cap,
-      low:  '不得低于 1000（避免掐死充电）',
-      high: '不得高于 ' + cap + '（本机 DT 电流上限）'
+      low:  'Min 1000 (avoids stalling charge)',
+      high: 'Max ' + cap + ' (device DT current limit)'
     };
   }
-  return { lo: 0, hi: 1200, low: '', high: '不得高于 1200（=120.0℃）' };
+  return { lo: 0, hi: 1200, low: '', high: 'Max 1200 (=120.0°C)' };
 }
 
 function onVotInput(ev){
@@ -3500,7 +3409,7 @@ function onVotBlur(ev){
   var r = votRange(key);
   if (isNaN(n) || n < r.lo || n > r.hi){
     this.className = 'danger';
-    noticeOnce((n < r.lo && r.low) ? r.low : (r.high || '数值越界'));
+    noticeOnce((n < r.lo && r.low) ? r.low : (r.high || 'Value out of range'));
     return;
   }
   this.className = '';
@@ -3511,10 +3420,10 @@ function doSaveVoter(){
   if (!d || !d.voter) return;
   var jobs = [];
 
-  // 模式
+  // Mode
   if (STATE.votModeDirty !== null)
     jobs.push(['vote_mode', STATE.votModeDirty, 'votMode' + STATE.votModeDirty]);
-  // 数值
+  // Value
   if (STATE.votDirty){
     for (var i = 0; i < VOT_KEYS.length; i++){
       var k = VOT_KEYS[i];
@@ -3524,15 +3433,11 @@ function doSaveVoter(){
   }
   if (!jobs.length) return;
 
-  // 统一走 runJobs：一次 setcal 批量写入，N 次 fork 压成 1 次。
-  // 失败时 onDone(false) 不会被调用，dirty 状态保留、按钮恢复可点，
-  // 用户改完能直接再试（与旧串行版行为一致）。
-  runJobs(jobs, $('btnVotSave'), '保存设置', function(){
-    toast('硬件直控已保存 ' + jobs.length + ' 项', 'ok');
+  runJobs(jobs, $('btnVotSave'), 'Save', function(){
+    toast('Saved ' + jobs.length + ' direct-control setting(s)', 'ok');
     STATE.votDirty = null;
     STATE.votModeDirty = null;
     $('btnVotSave').disabled = true;
-    // 强制直读绕开守护缓存 + 补一次延时刷新（见 afterSave 注释）
     afterSave();
   });
 }
@@ -3544,7 +3449,7 @@ function doSaveVoter(){
 //    逻辑各写一遍（旧 voter 保存曾因失败分支漏调 next() 而永久卡死）。
 var THERM_SEG = { thermStart:'therm_start', thermStop:'therm_stop' };
 var THERM_JSONKEY = { thermStart:'start', thermStop:'stop' };
-var THERM_DEFAULTS = { thermStart:650, thermStop:790 };
+var THERM_DEFAULTS = { thermStart:460, thermStop:540 };
 
 var SAFE_SEG = { safeCap:'safe_cap' };
 
@@ -3554,22 +3459,14 @@ var SAFE_SEG = { safeCap:'safe_cap' };
 var SOC_STOP_SEG = 'soc_stop';
 var SOC_STOP_DEFAULT = 90;
 
-// 后端内部代号 -> 用户可读的机型名（界面不暴露内部实现代号）
-var DEV_FRIENDLY = { qcom:'骁龙', mtk:'天玑' };
+var DEV_FRIENDLY = { qcom:'Snapdragon', mtk:'Dimensity' };
 var SAFE_JSONKEY = { safeCap:'cap' };
 var SAFE_DEFAULTS = { safeCap:0 };
 
-// 通用批量任务执行器
-//   jobs: [[seg, val, 名称], ...]
-//   btn : 触发的按钮元素（保存中禁用，结束后恢复）
-//   label: 按钮把文案还原成的原文
-//   onDone(ok): 结束后回调
-// 【为什么要批量】旧实现每个参数各起一次进程（sh vfcs_boost setcal k v），
-// 保存 6 个参数就要 fork 6 遍完整脚本，在 WebUI 上表现为"每次保存都卡一下"。
-// 现在拼成一条 setcal k1 v1 k2 v2 ... 一次执行，N 次压成 1 次。
+// Batch job runner
 function runJobs(jobs, btn, label, onDone){
   if (!jobs || !jobs.length){ if (onDone) onDone(true); return; }
-  if (btn){ btn.disabled = true; btn.textContent = '保存中…'; }
+  if (btn){ btn.disabled = true; btn.textContent = 'Saving...'; }
 
   var parts = [];
   for (var i = 0; i < jobs.length; i++){
@@ -3582,14 +3479,14 @@ function runJobs(jobs, btn, label, onDone){
     var ok = (r.code === 0) && (out.indexOf('OK') === 0);
     if (btn){ btn.textContent = label; btn.disabled = false; }
     if (!ok){
-      toast((out || '').replace(/^ERR:\s*/, '') || '写入失败', 'hot');
+      toast((out || '').replace(/^ERR:\s*/, '') || 'Write failed', 'hot');
       if (onDone) onDone(false);
       return;
     }
     if (onDone) onDone(true);
   }, function(){
     if (btn){ btn.textContent = label; btn.disabled = false; }
-    toast('保存失败：与模块通信异常', 'hot');
+    toast('Save failed: module communication error', 'hot');
     if (onDone) onDone(false);
   });
 }
@@ -3633,34 +3530,33 @@ function renderTherm(d){
   var t = d && d.therm;
   var hint = $('thermHint');
   if (!t){
-    if (hint) hint.innerHTML = '<b>本版本不含温控调节</b><br>' +
-      '后端未返回 therm 字段，请确认已刷入 v3.5.11 及以上版本。';
+    if (hint) hint.innerHTML = '<b>Thermal settings unsupported in this version</b><br>' +
+      'Backend did not return therm field; please flash v3.5.11+.';
     return;
   }
   var en = (STATE.thermEnDirty !== null) ? STATE.thermEnDirty : t.en;
   setPillRow('thermEnRow', 'data-te', String(en));
 
   if (hint){
-    var f10h = function(n){ return (n / 10).toFixed(1) + '℃'; };
+    var f10h = function(n){ return (n / 10).toFixed(1) + '°C'; };
     var tb = d ? d.tempBoard : undefined;
     var tc = d ? d.tempBatt : undefined;
     var cur = '';
     if (tb !== undefined && tb !== null && tb !== '' &&
         tc !== undefined && tc !== null && tc !== ''){
-      cur = '<br>当前实测：板级 <b>' + escapeHtml(f10h(tb)) + '</b>　电池 <b>' + escapeHtml(f10h(tc)) + '</b>';
+      cur = '<br>Live readings: Board <b>' + escapeHtml(f10h(tb)) + '</b> · Batt <b>' + escapeHtml(f10h(tc)) + '</b>';
     }
     hint.innerHTML = (t.en == 1)
-      ? '<b style="color:var(--ok)">温控已开启</b>：板级与电池两路取更严重的一路。'
+      ? '<b style="color:var(--ok)">Thermal Control Enabled</b>: stricter of board & battery wins.'
         + cur
-      : '<b style="color:var(--danger,#e5484d)">⚠ 温控已关闭</b>：保护线全部失效，'
-        + '仅建议散热充足时短时使用。' + cur;
+      : '<b style="color:var(--danger,#e5484d)">⚠ Thermal Control Disabled</b>: all thermal caps off; '
+        + 'use briefly with good cooling only.' + cur;
   }
 
   fillNum('thermStart', 'start', t, THERM_DEFAULTS, STATE.thermDirty);
   fillNum('thermStop',  'stop',  t, THERM_DEFAULTS, STATE.thermDirty);
 
-  // 派生保护线（只读展示）。前端按与后端 therm_sync 相同的等分规则现算，
-  //   保证"改输入立刻看到结果"，而不是显示上一次快照。
+  // Derived thermal thresholds (read-only preview)
   var list = $('thermLvlList');
   if (list){
     var g = function(k){
@@ -3670,32 +3566,31 @@ function renderTherm(d){
       return (t[jk] !== undefined) ? t[jk] : THERM_DEFAULTS[k];
     };
     var s = parseInt(g('thermStart'), 10), e = parseInt(g('thermStop'), 10);
-    if (isNaN(s)) s = 650;
-    if (isNaN(e)) e = 790;
-    var f10 = function(n){ return (n / 10).toFixed(1) + '℃'; };
+    if (isNaN(s)) s = 460;
+    if (isNaN(e)) e = 540;
+    var f10 = function(n){ return (n / 10).toFixed(1) + '°C'; };
     if (t.en != 1){
-      list.innerHTML = '<div style="opacity:.65">温控已关闭，保护线不生效。</div>';
+      list.innerHTML = '<div style="opacity:.65">Thermal control disabled; limits inactive.</div>';
     } else if (e <= s){
       list.innerHTML = '<div style="color:var(--danger,#e5484d)">' +
-        '停止干预温度必须高于开始降流温度。</div>';
+        'Release temp must be higher than throttle start temp.</div>';
     } else {
       var d3 = Math.max(1, Math.floor((e - s) / 3));
       var d4 = Math.max(1, Math.floor((e - s) / 4));
-      // 板级线由用户填的两点派生；电池线是固定值（后端 tcWarn/tcRelease）。
       var tcw = (t.tcWarn !== undefined) ? t.tcWarn : 405;
       var tcr = (t.tcRelease !== undefined) ? t.tcRelease : 430;
       list.innerHTML =
-        '<div>正常 → 低于 ' + f10(s) + '</div>' +
-        '<div>预警 → ' + f10(s) + ' 起（SOC 表退一档）</div>' +
-        '<div>降档A → ' + f10(s + d3) + '</div>' +
-        '<div>降档B → ' + f10(s + 2 * d3) + '</div>' +
-        '<div>撒手 → ≥ ' + f10(e) + '（停止写节点）</div>' +
-        '<div>恢复 → ≤ ' + f10(Math.max(0, s - 50)) + ' 且持续数秒</div>' +
+        '<div>Normal -> below ' + f10(s) + '</div>' +
+        '<div>Warn -> from ' + f10(s) + ' (SOC step down 1 tier)</div>' +
+        '<div>Step A -> ' + f10(s + d3) + '</div>' +
+        '<div>Step B -> ' + f10(s + 2 * d3) + '</div>' +
+        '<div>Release -> >= ' + f10(e) + ' (stop writing node)</div>' +
+        '<div>Recover -> <= ' + f10(Math.max(0, s - 50)) + ' and hold briefly</div>' +
         '<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--card-3)">' +
-          '<span style="opacity:.75">电池温度（固定，不可调）：' +
-          '预警 ' + f10(tcw) + ' ／ 撒手 ' + f10(tcr) + '</span></div>' +
+          '<span style="opacity:.75">Battery temp (fixed): ' +
+          'Warn ' + f10(tcw) + ' / Release ' + f10(tcr) + '</span></div>' +
         '<div style="opacity:.65;margin-top:4px;font-size:11.5px">' +
-          '降额阶梯按四等分派生：T1=' + f10(s) +
+          '4-step linear derate: T1=' + f10(s) +
           ' T2=' + f10(s + d4) + ' T3=' + f10(s + 2 * d4) +
           ' T4=' + f10(s + 3 * d4) + ' T5=' + f10(e) + '</div>';
     }
@@ -3706,33 +3601,34 @@ function renderSafe(d){
   var sc = d && d.safecap;
   var hint = $('safeHint');
 
-  // v3562: 防掉档已整体移除，这里只剩「静态封顶」。
-  //   safeEnRow 那个 DOM 节点已从页面删除，不能再 setPillRow 它。
   if (!sc){
-    if (hint) hint.innerHTML = '<b>后端未返回封顶数据</b><br>' +
-      '请确认模块脚本与 WebUI 版本一致（或重新刷入模块）。';
+    if (hint) hint.innerHTML = '<b>Backend did not return static cap data</b><br>' +
+      'Please verify module scripts and WebUI versions match (or re-flash module).';
     return;
   }
 
   var dev = (d && d.dev) || {};
   if (hint){
+    var vr = (d && d.voter && d.voter.ready);
     var devTxt = dev.class === 'qcom'
-      ? '本机为骁龙机型：由模块<b>直接接管充电电流</b>。'
+      ? 'Snapdragon device: module <b>directly controls charging current</b>.'
       : dev.class === 'mtk'
-        ? '本机为天玑机型：由模块<b>向系统申请电流</b>。'
-        : '本机机型未识别：';
+        ? (vr
+            ? 'Dimensity device (V2507A): <b>directly overrides DCHG_FCC limit</b> via vfcs_class.'
+            : 'Dimensity device: module <b>requests current from system</b>.')
+        : 'Unrecognized device class:';
     hint.innerHTML = devTxt + '<br>' +
-      '这里只限制电流<b>上限</b>，正常情况建议填 0。';
+      'Limits the <b>ceiling</b> only; leave at 0 for normal use.';
   }
 
   fillNum('safeCap', 'cap', sc, SAFE_DEFAULTS, STATE.safeDirty);
 
   var stat = $('safeStat');
   if (stat){
-    stat.innerHTML = '静态封顶：' +
-      ((sc.cap > 0) ? ('<b>' + escapeHtml(sc.cap) + ' mA</b>') : '<b>关闭</b>') +
-      '　机型：<b>' + escapeHtml(DEV_FRIENDLY[dev.class] || '—') + '</b>' +
-      (dev.model ? '（' + escapeHtml(dev.model) + '）' : '');
+    stat.innerHTML = 'Static cap: ' +
+      ((sc.cap > 0) ? ('<b>' + escapeHtml(sc.cap) + ' mA</b>') : '<b>Off</b>') +
+      ' · Platform: <b>' + escapeHtml(DEV_FRIENDLY[dev.class] || '—') + '</b>' +
+      (dev.model ? ' (' + escapeHtml(dev.model) + ')' : '');
   }
 }
 
@@ -3780,25 +3676,24 @@ function paintSocStop(v, b){
   var curTxt = '';
   if (soc !== null && soc !== '' && !isNaN(parseInt(soc, 10))){
     var s = parseInt(soc, 10);
-    curTxt = '　当前电量 <b>' + s + '%</b>' +
+    curTxt = ' · Current SOC <b>' + s + '%</b>' +
       (s >= v
-        ? '（<span style="color:var(--warn,#d97706)">已达停止线，模块已撒手</span>）'
-        : '（还有 ' + (v - s) + '% 到停止线）');
+        ? ' (<span style="color:var(--warn,#d97706)">stop threshold reached, handed back</span>)'
+        : ' (' + (v - s) + '% below stop)');
   }
 
   var body;
   if (v >= 100){
-    body = '<b>一直管到满</b>：模块不在电量上设上限，满电后由系统转涓流。' +
-      '此时申请值会被 cms 的自然降额压住，不会硬冲。';
+    body = '<b>Manage until full</b>: no upper SOC cap; system handles final trickle phase. ' +
+      'Natural CMS derating keeps top-off safe.';
   } else if (v >= 95){
-    body = '接近满电才停手：<b>' + v + '%</b> 之后交回系统。' +
-      '高电量段本来就由系统逐级降额，模块在这里能起的作用有限。';
+    body = 'Stops near full: hands back after <b>' + v + '%</b>. ' +
+      'System derates high-SOC current natively regardless.';
   } else if (v <= 50){
-    body = '<span style="color:var(--warn,#d97706)">偏低</span>：' +
-      '<b>' + v + '%</b> 就停手，模块只在低电量段起作用。想要快充满请往上拖。';
+    body = '<span style="color:var(--warn,#d97706)">Low threshold</span>: ' +
+      'stops at <b>' + v + '%</b>, only boosting low SOC. Slide up for faster full charge.';
   } else {
-    body = '充到 <b>' + v + '%</b> 后模块不再写节点，把控制权交回系统。' +
-      '这不是限速，是让 vivo 按自己的曲线收尾。';
+    body = 'Stops writing above <b>' + v + '%</b>, letting vivo handle its factory CV taper.';
   }
   hint.innerHTML = body + curTxt;
 }
@@ -3848,7 +3743,7 @@ function onThermBlur(ev){
   var n = parseInt(cleaned, 10);
   if (isNaN(n) || n < 300 || n > 1000){
     this.className = 'danger';
-    noticeOnce('温度需在 30.0~100.0℃ 之间（填 300~1000）');
+    noticeOnce('Temp must be 30.0~100.0°C (enter 300~1000)');
     return;
   }
   this.className = '';
@@ -3872,7 +3767,7 @@ function onSafeInput(ev){
   //   querySelector('input[data-seg]') 永远取不到元素，会退到写死的 15600。
   //   改为直接读后端上限（本机 DT 14100 / 超频档 15600）。
   var _capHiS = calcEffCap(STATE.data);
-  if (!(_capHiS > 0)) _capHiS = 14100;
+  if (!(_capHiS > 0)) _capHiS = 15600;
   if (n < 0 || n > _capHiS){
     this.className = 'danger';
     return;
@@ -3890,10 +3785,10 @@ function onSafeBlur(ev){
   if (cleaned === ''){ this.className = ''; return; }
   var n = parseInt(cleaned, 10);
   var _capHiS = calcEffCap(STATE.data);
-  if (!(_capHiS > 0)) _capHiS = 14100;
+  if (!(_capHiS > 0)) _capHiS = 15600;
   if (isNaN(n) || n < 0 || n > _capHiS){
     this.className = 'danger';
-    noticeOnce('封顶上限需在 0~' + _capHiS + ' mA 之间（0=不封顶）');
+    noticeOnce('Static cap must be 0~' + _capHiS + ' mA (0 = unlimited)');
     return;
   }
   this.className = '';
@@ -3927,90 +3822,77 @@ function selfProtectWarn(jobs){
     }
   }
   if (en === 0){
-    msgs.push('· 温控【关闭】：板级与电池两路温度保护线全部失效，' +
-              '电流只按电量表申请。高温下会由内核的 80℃ 硬切兜底，' +
-              '表现为功率断崖式下跌（不是平滑降流）。');
+    msgs.push('- Thermal Control [OFF]: both board and battery temp caps are disabled; ' +
+              'current follows SOC table only until kernel 80°C hard cutoff ' +
+              '(abrupt power drop instead of smooth step-down).');
   } else {
     if (s !== null && s >= 750)
-      msgs.push('· 开始降流温度 ' + (s / 10).toFixed(1) + '℃：' +
-                '已经非常接近内核 80℃ 硬切阈值，实际降流会来得很晚。');
+      msgs.push('- Throttle start temp ' + (s / 10).toFixed(1) + '°C: ' +
+                'very close to kernel 80°C hard cutoff; throttling kicks in very late.');
     if (e !== null && e >= 900)
-      msgs.push('· 停止干预温度 ' + (e / 10).toFixed(1) + '℃：' +
-                '这个量级等于放弃"撒手"保护，只剩内核硬切。');
+      msgs.push('- Release temp ' + (e / 10).toFixed(1) + '°C: ' +
+                'effectively bypasses thermal release, relying on kernel hard cutoff.');
   }
   return msgs;
 }
 
 function doSaveSafe(){
-  // ★ v3527：高级页合并后，封顶 + 温控共用这一个「保存」按钮。
-  //   各边 dirty 一起收集，一次 setcal 批量写完（只 fork 一次进程）。
-  //   v3562：防掉档开关已移除，不再提交 safe_en。
   var jobs = [];
   if (STATE.safeDirty && STATE.safeDirty.safeCap !== undefined)
-    jobs.push(['safe_cap', STATE.safeDirty.safeCap, '静态封顶']);
+    jobs.push(['safe_cap', STATE.safeDirty.safeCap, 'Static Cap']);
   if (STATE.thermEnDirty !== null)
-    jobs.push(['therm_en', STATE.thermEnDirty, '温控开关']);
+    jobs.push(['therm_en', STATE.thermEnDirty, 'Thermal Switch']);
   if (STATE.thermDirty){
     for (var k in THERM_SEG){
       if (STATE.thermDirty[k] !== undefined && THERM_SEG.hasOwnProperty(k))
         jobs.push([THERM_SEG[k], STATE.thermDirty[k], k]);
     }
   }
-  // ★ v3536：停止介入电量
   if (STATE.socStopDirty !== null)
-    jobs.push([SOC_STOP_SEG, STATE.socStopDirty, '停止介入电量']);
+    jobs.push([SOC_STOP_SEG, STATE.socStopDirty, 'Stop Boost SOC']);
   if (!jobs.length) return;
 
   var doIt = function(){
-    runJobs(jobs, $('btnSafeSave'), '保存', function(){
-      toast('已保存 ' + jobs.length + ' 项', 'ok');
+    runJobs(jobs, $('btnSafeSave'), 'Save', function(){
+      toast('Saved ' + jobs.length + ' setting(s)', 'ok');
       STATE.safeDirty = null;
       STATE.safeEnDirty = null;
       STATE.thermDirty = null;
       STATE.thermEnDirty = null;
-      STATE.socStopDirty = null;   // ★ v3536
+      STATE.socStopDirty = null;
       $('btnSafeSave').disabled = true;
       afterSave();
     });
   };
 
-  // 有关键项被削弱时，先弹一次确认（可取消，取消只是不保存，不改任何配置）
   var w = selfProtectWarn(jobs);
   if (w.length){
-    askConfirm('即将保存以下自我保护设置：\n\n' + w.join('\n') +
-      '\n\n【这是你的自由，模块不会替你决定】\n' +
-      '但请确认你清楚代价。确定继续保存吗？',
-      doIt, { ok: '我已了解，继续', cancel: '返回修改', danger: true });
+    askConfirm('Confirm weakened thermal protection:\n\n' + w.join('\n') +
+      '\n\nYour choice — please confirm you understand the thermal risk before saving.',
+      doIt, { ok: 'I Understand, Save', cancel: 'Go Back', danger: true });
   } else {
     doIt();
   }
 }
 
-// ---- 一键恢复原厂（全机型）----
+// ---- One-tap Restore Stock ----
 function doRestore(){
-  askConfirm('一键恢复原厂？\n\n将执行：\n' +
-    '· 停止守护进程，并把档位切到「原厂」（重启后也不会再干预）\n' +
-    '· 交回充电电流的系统控制权\n' +
-    '· 把电流额度还原为出厂设置\n' +
-    '· 复位协议与高压标记\n\n' +
-    '不会删除配置、不会卸载模块。\n' +
-    '注意：这是「彻底停手」，之后要重新加速得回本界面再选一次档位。\n' +
-    '只想临时停一会儿、之后接着用 -> 请改用上面的「临时解除加速」。',
+  askConfirm('Restore Stock profile?\n\nThis will:\n' +
+    '- Stop daemon and switch to Stock (remains off after reboot)\n' +
+    '- Hand charging current control back to stock scheduler\n' +
+    '- Reset fchg_fcc_ma override to factory idle\n' +
+    '- Clear session and protocol state\n\n' +
+    'Config files and module remain installed.\n' +
+    'Note: re-enabling boost requires picking a profile here again.\n' +
+    'Use "Pause Boost" above for a temporary pause instead.',
     function(){
       var btn = $('btnRestore');
-      btn.disabled = true; btn.textContent = '恢复中…';
-      // ★ v3533：恢复原厂这条路径比切档更重（多了一步还原动作与
-      //   最多 10 秒的等守护退出循环），实测 6~10 秒。默认 6 秒超时必然踩线，
-      //   所以放大到 30 秒（10 秒等待 + 还原 + 余量）。
+      btn.disabled = true; btn.textContent = 'Restoring...';
       exec("sh " + BIN + " restore", 30000).then(function(r){
         var out = (r.stdout || '').trim();
-        btn.disabled = false; btn.textContent = '一键恢复原厂';
-        // ★ v3533：超时也按成功处理，理由同 doSwitchProfile ——
-        //   脚本侧多半已经执行完，只是回调没等到。此时报失败会误导用户重试。
+        btn.disabled = false; btn.textContent = 'Restore Stock';
         var timedOut = (r.code !== 0) && /timeout/i.test(out + ' ' + (r.stderr || ''));
         if (r.code === 0 || timedOut){
-          // 恢复原厂后守护已停，status.json 由脚本侧写入真值；
-          //   设 8 秒兜底钉住，防止这一轮轮询抢在写入前拿到旧值。
           STATE.pinActive = 3;
           STATE.pinUntil = Date.now() + 8000;
           setActiveTab(3);
@@ -4019,18 +3901,18 @@ function doRestore(){
             STATE.data.running = false;
             STATE.data.paused = false;
             STATE.data.intervening = false;
-            STATE.data.whyInactive = '原厂档：模块已停止干预，充电控制权已交回系统。';
+            STATE.data.whyInactive = 'Stock profile: module stopped, charging managed by system.';
           }
-          toast(timedOut ? '已恢复原厂（响应较慢，已按本地状态显示）' : '已恢复原厂', 'ok');
+          toast(timedOut ? 'Restored stock (slow reply; local state updated)' : 'Restored to stock', 'ok');
           afterSave();
         } else {
-          toast('恢复失败：' + ((r.stderr || out || '').trim() || ('code ' + r.code)), 'hot');
+          toast('Restore failed: ' + ((r.stderr || out || '').trim() || ('code ' + r.code)), 'hot');
         }
       }, function(){
-        btn.disabled = false; btn.textContent = '一键恢复原厂';
-        toast('恢复失败：与模块通信异常', 'hot');
+        btn.disabled = false; btn.textContent = 'Restore Stock';
+        toast('Restore failed: module communication error', 'hot');
       });
-    }, { ok: '确认恢复', cancel: '取消', danger: true });
+    }, { ok: 'Restore', cancel: 'Cancel', danger: true });
 }
 
 // ============================================================
@@ -4061,38 +3943,36 @@ function doHealth(){
   if (!btn) return;
 
   btn.disabled = true;
-  btn.textContent = '检测中…（约 12 秒）';
+  btn.textContent = 'Checking... (~12s)';
   if (out){
     out.innerHTML = '<div style="font-size:12px;color:var(--dim);line-height:1.5">' +
-      '正在采样 10 秒，测量守护与看门狗的实时 CPU 占用…</div>';
+      'Sampling for 10s to measure live CPU usage of daemon and watchdog...</div>';
   }
 
-  // 找 boost 脚本路径（与 logdump 用同一套候选）
   var CANDIDATES = [
-    '/data/adb/modules/v2352a_charge_boost/system/bin/vfcs_boost',
-    '/data/adb/modules_update/v2352a_charge_boost/system/bin/vfcs_boost'
+    '/data/adb/modules/v2507a_charge_boost/system/bin/vfcs_boost',
+    '/data/adb/modules_update/v2507a_charge_boost/system/bin/vfcs_boost'
   ];
 
   function tryAt(i){
     if (i >= CANDIDATES.length){
-      finish('无法定位模块脚本，请确认模块已安装并启用。', true);
+      finish('Module script not found; verify module is installed and enabled.', true);
       return;
     }
     var p = CANDIDATES[i];
     exec('test -f ' + p + ' && echo __HAVE__ || echo __MISS__').then(function(r){
       if ((r.stdout || '').indexOf('__HAVE__') < 0){ tryAt(i + 1); return; }
-      // 20 秒超时：内部 sleep 10 + 启动开销
       exec('sh ' + p + ' health', 25000).then(function(r2){
         render(r2);
       }, function(){
-        finish('与模块通信超时（执行被中断）', true);
+        finish('Module communication timed out (aborted)', true);
       });
     }, function(){ tryAt(i + 1); });
   }
 
   function finish(msg, bad){
     btn.disabled = false;
-    btn.textContent = '检测运行占用';
+    btn.textContent = 'Check CPU / Health';
     if (out){
       out.innerHTML = '<div style="font-size:13px;color:' +
         (bad ? 'var(--hot,#dc2626)' : 'var(--ok,#16a34a)') +
@@ -4103,12 +3983,12 @@ function doHealth(){
 
   function render(r){
     btn.disabled = false;
-    btn.textContent = '检测运行占用';
+    btn.textContent = 'Check CPU / Health';
 
     var s = (r.stdout || '').trim();
     if (s.indexOf('HEALTH_BEGIN') < 0){
-      var msg = (r.stderr || s || '无输出').slice(0, 400);
-      finish('检测失败：' + msg, true);
+      var msg = (r.stderr || s || 'No output').slice(0, 400);
+      finish('Check failed: ' + msg, true);
       return;
     }
 
@@ -4132,14 +4012,13 @@ function doHealth(){
       return (v / 10000).toFixed(3) + '%';
     }
 
-    // 颜色
     var color = 'var(--ok,#16a34a)';
     var icon = '✔';
-    var title = '一切正常';
+    var title = 'All Healthy';
     if (verdict === 'warn'){
-      color = '#d97706'; icon = '⚠'; title = '需要留意';
+      color = '#d97706'; icon = '⚠'; title = 'Warning';
     } else if (verdict === 'fail'){
-      color = 'var(--hot,#dc2626)'; icon = '✕'; title = '检测到异常';
+      color = 'var(--hot,#dc2626)'; icon = '✕'; title = 'Issue Detected';
     }
 
     var rows = [];
@@ -4198,15 +4077,15 @@ function doHealth(){
     var wRun = parseInt(D.watchdog_runsec, 10) || 0;
     function runTxt(s){
       if (!s) return '';
-      if (s < 60) return ' · 运行 ' + s + ' 秒';
-      if (s < 3600) return ' · 运行 ' + Math.floor(s / 60) + ' 分钟';
-      return ' · 运行 ' + (s / 3600).toFixed(1) + ' 小时';
+      if (s < 60) return ' · up ' + s + 's';
+      if (s < 3600) return ' · up ' + Math.floor(s / 60) + 'm';
+      return ' · up ' + (s / 3600).toFixed(1) + 'h';
     }
 
-    // 主指标：模块自身占用（大字）
+    // Main metric: module self CPU usage
     rows.push('<div style="display:flex;justify-content:space-between;align-items:baseline;' +
       'gap:10px;padding:8px 0;border-bottom:1px solid var(--card-3,rgba(127,127,127,.15))">' +
-      '<span style="color:var(--dim);font-size:12px">模块自身占用</span>' +
+      '<span style="color:var(--dim);font-size:12px">Module Self CPU</span>' +
       '<span style="font-size:17px;font-weight:700;' +
       (!selfKnown ? 'color:var(--dim)'
         : (selfBad ? 'color:var(--hot,#dc2626)' : 'color:var(--ok,#16a34a)')) + '">' +
@@ -4214,77 +4093,75 @@ function doHealth(){
 
     rows.push('<div style="font-size:11px;color:var(--dim);margin:2px 0 8px;line-height:1.5">' +
       (selfKnown
-        ? '自身占用 = 模块进程实际消耗的 CPU（累计 ÷ 运行时长），不随运行时间增长。'
-        : '守护运行不足 2 分钟，「平均占用」样本不足，这里不显示数字。') +
+        ? 'Self CPU = actual process CPU (cumulative / uptime); does not grow over time.'
+        : 'Daemon uptime < 2m; average CPU sample insufficient (hidden).') +
       '</div>');
 
-    row('  · 守护进程',
-        (dLifeOk ? pctSelf(dLife) : '样本不足') + runTxt(dRun),
+    row('  · Daemon',
+        (dLifeOk ? pctSelf(dLife) : 'Too early') + runTxt(dRun),
         (dLifeOk && dLife > 20000));
-    row('  · 看门狗',
-        (wLifeOk ? pctSelf(wLife) : '样本不足') + runTxt(wRun),
+    row('  · Watchdog',
+        (wLifeOk ? pctSelf(wLife) : 'Too early') + runTxt(wRun),
         (wLifeOk && wLife > 10000));
 
-    // 子进程历史累计：只作诊断，已从「占用」语义里剥离
+    // Historical child CPU (diagnostics only)
     if ((!isNaN(dChild) && dChild > 0) || (!isNaN(wChild) && wChild > 0)){
       var childTotal = ((!isNaN(dChild) && dChild >= 0) ? dChild : 0) +
                        ((!isNaN(wChild) && wChild >= 0) ? wChild : 0);
-      row('诊断 · 子进程累计流水', pctHist(childTotal));
+      row('Diag · Child CPU Sum', pctHist(childTotal));
       rows.push('<div style="font-size:11px;color:var(--dim);margin:2px 0 8px;line-height:1.5">' +
-        '这一项是从进程启动至今 fork 出去的所有临时进程（sleep/cat/awk）的' +
-        '<b>累计</b>消耗，只增不减，代表"一共干过多少活"，<b>不是此刻的负载</b>。' +
-        '运行时间越长越高，属正常现象。' +
+        '<b>Cumulative</b> CPU of forked subshells (sleep/cat/awk) since start; ' +
+        'represents total historical work, <b>not current load</b>.' +
         '</div>');
     }
 
-    // 瞬时值（辅助）—— 窗口内没有 jiffies 增量时不画 0
+    // Instantaneous window activity
     var dJif = parseInt(D.cpu_daemon_jiffies, 10);
     var wJif = parseInt(D.cpu_watchdog_jiffies, 10);
     function act(v){
       if (isNaN(v) || v < 0) return '—';
-      return v === 0 ? '无活动' : (v + ' tick');
+      return v === 0 ? 'Idle' : (v + ' tick');
     }
     var instantActive = (D.cpu_instant_active === '1');
-    row('此刻瞬时占用', instantActive ? pct(tCpu) : '本窗口无活动');
-    // 逐进程：窗口内 0 tick 就写「无活动」，不再画一个会被误读的 0.000%
-    row('  · 守护进程', (isNaN(dJif) || dJif < 0) ? '—'
-        : (dJif === 0 ? '无活动' : pct(dCpu)));
-    row('  · 看门狗', (isNaN(wJif) || wJif < 0) ? '—'
-        : (wJif === 0 ? '无活动' : pct(wCpu)));
-    row('  · 窗口内 tick 增量', act(dJif) + ' / ' + act(wJif));
-    row('采样窗口', win > 0 ? ((win / 1000).toFixed(1) + ' 秒') : '—');
+    row('Window CPU Usage', instantActive ? pct(tCpu) : 'Idle in window');
+    row('  · Daemon', (isNaN(dJif) || dJif < 0) ? '—'
+        : (dJif === 0 ? 'Idle' : pct(dCpu)));
+    row('  · Watchdog', (isNaN(wJif) || wJif < 0) ? '—'
+        : (wJif === 0 ? 'Idle' : pct(wCpu)));
+    row('  · Window ticks', act(dJif) + ' / ' + act(wJif));
+    row('Sample Window', win > 0 ? ((win / 1000).toFixed(1) + 's') : '—');
 
     if (!instantActive && selfKnown){
       rows.push('<div style="font-size:11px;color:var(--dim);margin:6px 0 2px;line-height:1.5">' +
-        '「本窗口无活动」是正常的：模块每 20 秒才醒一次，这次采样窗口没赶上。' +
-        '以上方「模块自身占用」为准。</div>');
+        '"Idle in window" is normal: when unplugged, daemon wakes only every 20s. ' +
+        'Refer to "Module Self CPU" above.</div>');
     }
 
-    // 进程
-    row('守护进程',
-        D.daemon_alive === '1' ? ('运行中 · PID ' + (D.daemon_pid || '?')) : '未运行',
+    // Processes
+    row('Daemon',
+        D.daemon_alive === '1' ? ('Running · PID ' + (D.daemon_pid || '?')) : 'Stopped',
         D.daemon_alive !== '1');
-    row('看门狗',
-        D.watchdog_alive === '1' ? ('运行中 · PID ' + (D.watchdog_pid || '?')) : '未运行',
+    row('Watchdog',
+        D.watchdog_alive === '1' ? ('Running · PID ' + (D.watchdog_pid || '?')) : 'Stopped',
         D.watchdog_alive !== '1');
-    row('心跳',
-        (isNaN(beatAge) || beatAge < 0) ? '无记录' :
-          (beatAge <= 60 ? (beatAge + ' 秒前 ✔') : (beatAge + ' 秒前')),
+    row('Heartbeat',
+        (isNaN(beatAge) || beatAge < 0) ? 'No record' :
+          (beatAge <= 60 ? (beatAge + 's ago ✔') : (beatAge + 's ago')),
         (!isNaN(beatAge) && beatAge > 120));
 
-    // 状态（读不到的项一律「—」，不猜、不画 -1）
+    // Live state
     var online = (D.usb_online === '1');
-    var onlineTxt = (D.usb_online === '1') ? '已连接'
-                  : (D.usb_online === '0') ? '未连接' : '—';
-    row('充电器', onlineTxt);
-    row('电池状态', (D.bat_status && D.bat_status !== '—' && D.bat_status !== '?')
+    var onlineTxt = (D.usb_online === '1') ? 'Connected'
+                  : (D.usb_online === '0') ? 'Unplugged' : '—';
+    row('Charger', onlineTxt);
+    row('Battery Status', (D.bat_status && D.bat_status !== '—' && D.bat_status !== '?')
         ? D.bat_status : '—');
     var socN = parseInt(D.soc, 10);
-    row('电量', (isNaN(socN) || socN < 0) ? '—' : (socN + '%'));
-    var gname = {'1':'激进','2':'温和','3':'原厂'}[D.active] || D.active;
-    row('当前档位', gname || '—');
+    row('SOC', (isNaN(socN) || socN < 0) ? '—' : (socN + '%'));
+    var gname = {'1':'Aggressive','2':'Balanced','3':'Stock'}[D.active] || D.active;
+    row('Active Profile', gname || '—');
 
-    // 判决层
+    // Voter / direct channel
     var faKey = null;
     for (var k in D){
       if (/^vot_.*_fa$/.test(k)){ faKey = k; break; }
@@ -4294,17 +4171,17 @@ function doHealth(){
       var fa = D[faKey];
       var faTxt = (fa === '0' || fa === '1') ? fa : '—';
       var stuck = (!online && fa === '1');
-      row('注入通道 ' + tgt, 'force_active=' + faTxt, stuck);
+      row('Inject Ch ' + tgt, 'force_active=' + faTxt, stuck);
       if (stuck){
         rows.push('<div style="font-size:11.5px;color:#d97706;margin-top:6px;line-height:1.5">' +
-          '⚠ 未插电但 force_active 仍为 1，可能是上次充电的残留。</div>');
+          '⚠ Unplugged yet force_active=1 (possible leftover override from last charge).</div>');
       }
     }
 
     var logBytes = parseInt(D.log_bytes, 10);
-    row('日志大小', (isNaN(logBytes) || logBytes < 0) ? '—'
+    row('Log Size', (isNaN(logBytes) || logBytes < 0) ? '—'
         : ((logBytes / 1024).toFixed(0) + ' KB'));
-    row('版本', D.version || '—');
+    row('Version', D.version || '—');
 
     var html = '';
     html += '<div style="border:1px solid ' + color + '33;border-radius:12px;' +
@@ -4321,8 +4198,8 @@ function doHealth(){
     if (verdict !== 'ok'){
       html += '<div style="font-size:11.5px;color:var(--dim);margin-top:10px;' +
         'line-height:1.6;padding-top:8px;border-top:1px dashed var(--card-3,rgba(127,127,127,.25))">' +
-        '把上面这张表截图发给开发者，就能定位问题。<br>' +
-        '需要更详细的日志，再点「导出诊断包」。</div>';
+        'Screenshot this summary to help diagnose the issue.<br>' +
+        'For full logs, tap "Export Debug Bundle".</div>';
     }
     html += '</div>';
 
@@ -4342,27 +4219,26 @@ function doLogDump(){
   if (!btn) return;
 
   btn.disabled = true;
-  btn.textContent = '收集并打包中…';
-  if (out) out.textContent = '正在收集诊断快照（约 5~15 秒）…\n' +
-    '包含：模块状态 / 充电读数 / DT 表 / 判决层 / sysfs / dmesg / 属性 / 进程';
+  btn.textContent = 'Collecting & archiving...';
+  if (out) out.textContent = 'Collecting debug snapshot (~5-15s)...\n' +
+    'Includes: module state / charging / DT / voter / sysfs / dmesg / props / procs';
 
   var DUMP_CANDIDATES = [
-    '/data/adb/modules/v2352a_charge_boost/logdump.sh',
-    '/data/adb/modules_update/v2352a_charge_boost/logdump.sh'
+    '/data/adb/modules/v2507a_charge_boost/logdump.sh',
+    '/data/adb/modules_update/v2507a_charge_boost/logdump.sh'
   ];
 
-  // 依次尝试候选路径；找到就执行
+  // Try candidates sequentially
   function tryAt(i){
     if (i >= DUMP_CANDIDATES.length){
       btn.disabled = false;
-      btn.textContent = '导出调试日志';
-      if (out) out.textContent = '失败：找不到 logdump.sh\n' +
-        '期望位置：\n  ' + DUMP_CANDIDATES.join('\n  ');
-      toast('找不到 logdump.sh', 'hot');
+      btn.textContent = 'Export Debug Bundle';
+      if (out) out.textContent = 'Failed: logdump.sh not found\n' +
+        'Expected at:\n  ' + DUMP_CANDIDATES.join('\n  ');
+      toast('logdump.sh not found', 'hot');
       return;
     }
     var path = DUMP_CANDIDATES[i];
-    // 先探测存在性，避免把 "not found" 当成真正的输出
     exec("test -f " + path + " && echo __HAVE__ || echo __MISS__").then(function(r){
       var s = (r.stdout || '').trim();
       if (s.indexOf('__HAVE__') < 0){
@@ -4376,16 +4252,14 @@ function doLogDump(){
   }
 
   function runDump(path){
-    // 120 秒超时：dmesg / getprop / logcat 全量扫描 + tar 打包，
-    //   在充电负载下最慢实测十几秒，留足余量避免误判超时。
     exec("sh " + path, 120000).then(function(r){
       btn.disabled = false;
-      btn.textContent = '导出调试日志';
+      btn.textContent = 'Export Debug Bundle';
 
       var stdout = (r.stdout || '');
       var stderr = (r.stderr || '');
 
-      // logdump.sh 最后会打印一行 DUMP_PATH=...
+      // logdump.sh prints DUMP_PATH=...
       var m = stdout.match(/DUMP_PATH=(\S+)/);
       var dumpPath = m ? m[1] : '';
 
@@ -4394,35 +4268,34 @@ function doLogDump(){
           out.innerHTML = '';
           var d1 = document.createElement('div');
           d1.style.color = 'var(--ok,#16a34a)';
-          d1.textContent = '✔ 已生成（只读操作，未改任何设置）';
+          d1.textContent = '✔ Generated (read-only; no settings changed)';
           out.appendChild(d1);
 
           var d2 = document.createElement('div');
           d2.style.marginTop = '6px';
-          d2.textContent = '文件：' + dumpPath;
+          d2.textContent = 'File: ' + dumpPath;
           out.appendChild(d2);
 
           var d3 = document.createElement('div');
           d3.style.marginTop = '6px';
           d3.style.color = 'var(--dim)';
-          d3.textContent = '用文件管理器到 /sdcard/Download 下即可看到，直接分享出去。';
+          d3.textContent = 'Check /sdcard/Download in your file manager to share the archive.';
           out.appendChild(d3);
         }
-        toast('调试日志已生成', 'ok');
+        toast('Debug bundle created', 'ok');
       } else {
         var msg = (stderr || stdout || '').trim();
-        // 只截末尾，避免把整份快照塞进 toast
-        if (msg.length > 600) msg = '…' + msg.slice(-600);
+        if (msg.length > 600) msg = '...' + msg.slice(-600);
         if (out){
-          out.textContent = '失败（code ' + r.code + '）\n' + msg;
+          out.textContent = 'Failed (code ' + r.code + ')\n' + msg;
         }
-        toast('导出失败，详见下方', 'hot');
+        toast('Export failed; see details below', 'hot');
       }
     }, function(){
       btn.disabled = false;
-      btn.textContent = '导出调试日志';
-      if (out) out.textContent = '失败：与模块通信异常（执行超时或被拒）';
-      toast('导出失败：通信异常', 'hot');
+      btn.textContent = 'Export Debug Bundle';
+      if (out) out.textContent = 'Failed: module communication error (timeout or denied)';
+      toast('Export failed: comm error', 'hot');
     });
   }
 
@@ -4542,107 +4415,96 @@ function fetchData(onStale){
         var _err = (r2.stderr || '').trim();
         var _out = (r2.stdout || '').trim();
 
-        // ① 回调超时：15 秒没等到结果
         if (/timeout/i.test(_err) || /timeout/i.test(_out)){
           throw new Error(
-            '读取超时（等待超过 15 秒）\n\n' +
-            '常见原因与对策：\n' +
-            '· 手机正在极低温/低电量，脚本读传感器变慢 → 插上充电器再试\n' +
-            '· 系统刚开机、后台繁忙 → 等 1 分钟再刷新\n' +
-            '· 模块的 DT 缓存还没建好（首次运行） → 等一次自动重建即可，约 5~10 秒\n\n' +
-            '如果反复出现，在终端执行看耗时：\n' +
+            'Read timed out (waited > 15s)\n\n' +
+            'Common causes:\n' +
+            '- Very low temp/SOC slows sensor reads -> plug in charger and retry\n' +
+            '- System just booted and background I/O is busy -> wait 1m\n' +
+            '- First-run DT cache building -> wait ~5-10s\n\n' +
+            'Run in terminal to inspect timing:\n' +
             'time sh ' + BIN + ' getjson');
         }
 
-        // ② 有 stderr：脚本本身报错了
         if (_err){
-          throw new Error('模块脚本报错：' + _err +
-            '\n\n这通常说明模块文件损坏或权限不对。\n' +
-            '建议：重新刷一次模块包，然后重启手机。');
+          throw new Error('Module script error: ' + _err +
+            '\n\nCheck module file integrity/permissions or re-flash.');
         }
 
-        // ③ 完全没输出：最可能是模块没装 / 路径不对
         if (!_out){
           throw new Error(
-            '模块没有任何输出\n\n' +
-            '这通常意味着：\n' +
-            '· 模块没装好，或已被卸载/禁用\n' +
-            '· 刚刷入还没重启（KernelSU 需要重启才生效）\n\n' +
-            '建议：确认模块已启用 → 重启手机 → 再打开本页。');
+            'No output from module\n\n' +
+            'Possible causes:\n' +
+            '- Module not installed, disabled, or uninstalled\n' +
+            '- Reboot required after flashing in KernelSU\n\n' +
+            'Ensure module is enabled -> reboot -> reopen WebUI.');
         }
 
-        // ④ 有输出但不是合法 JSON
-        throw new Error('返回内容无法解析（长度 ' + _out.length + ' 字节）\n\n' +
-          '前 80 字符：' + _out.slice(0, 80) +
-          '\n\n这可能是模块版本与本页面不匹配。');
+        throw new Error('Invalid JSON response (' + _out.length + ' bytes)\n\n' +
+          'First 80 chars: ' + _out.slice(0, 80) +
+          '\n\nVersion mismatch between module script and WebUI.');
       }
-      j2._src = 'live';          // 数据来源标记（现场直读）
+      j2._src = 'live';
       return j2;
     });
   });
 }
 
-// ---- 加速开关状态（临时解除加速）----
+// ---- Pause status indicator ----
 function renderPause(d){
   var el = $('pauseStat');
   if (!el) return;
   var paused = !!(d && d.paused);
   var html;
   if (paused){
-    html = '<b style="color:var(--warn,#d97706)">当前：已临时解除</b><br>' +
-      '干预已撤掉，充电交回系统。';
+    html = '<b style="color:var(--warn,#d97706)">Status: Temporarily Paused</b><br>' +
+      'Overrides cleared; charging handled by system.';
   } else {
-    html = '<b style="color:var(--ok,#30a46c)">当前：加速生效中</b>';
+    html = '<b style="color:var(--ok,#30a46c)">Status: Boost Active</b>';
     if (d && d.running === false){
-      html += '<br>（守护进程当前未在运行，点「恢复加速」会把它重新拉起）';
+      html += '<br>(Daemon not running; tap "Resume Boost" to restart)';
     }
   }
   if (el.innerHTML !== html) el.innerHTML = html;
 }
 
-// ---- 临时解除加速 / 恢复加速（照 120w 模块的 paused 机制）----
 function doPause(){
-  askConfirm('临时解除加速？\n\n' +
-    '· 撤掉全部干预，但不改配置，重启后仍保持\n' +
-    '· 之后可点「恢复加速」接着用\n\n' +
-    '适合临时插慢充 / 车载。',
+  askConfirm('Temporarily pause boost?\n\n' +
+    '- Clears all overrides while keeping config across reboots\n' +
+    '- Tap "Resume Boost" later to re-enable\n\n' +
+    'Ideal for slow or car chargers.',
     function(){
       var btn = $('btnPause');
-      btn.disabled = true; btn.textContent = '解除中…';
-      // ★ v3534：pause 实测最快 80ms（守护已停）到 1.4 秒（需拉起守护）；
-      //   resume 实测 1.4 秒（冷缓存 + 拉起守护）。默认 6 秒虽够用，
-      //   但这两个动作同样会 spawn_daemon，机器繁忙时可能超 6 秒。
-      //   统一放到 20 秒，与 profile write 同档。
+      btn.disabled = true; btn.textContent = 'Pausing...';
       exec("sh " + BIN + " pause", 20000).then(function(r){
-        btn.disabled = false; btn.textContent = '临时解除加速';
+        btn.disabled = false; btn.textContent = 'Pause Boost';
         if (r.code === 0){
-          toast('已临时解除加速', 'ok');
+          toast('Boost paused', 'ok');
           afterSave();
         } else {
-          toast('解除失败：' + ((r.stderr || r.stdout || '').trim() || ('code ' + r.code)), 'hot');
+          toast('Pause failed: ' + ((r.stderr || r.stdout || '').trim() || ('code ' + r.code)), 'hot');
         }
       }, function(){
-        btn.disabled = false; btn.textContent = '临时解除加速';
-        toast('解除失败：与模块通信异常', 'hot');
+        btn.disabled = false; btn.textContent = 'Pause Boost';
+        toast('Pause failed: module communication error', 'hot');
       });
-    }, { ok: '临时解除', cancel: '取消' });
+    }, { ok: 'Pause', cancel: 'Cancel' });
 }
 
 function doResume(){
   var btn = $('btnResume');
-  btn.disabled = true; btn.textContent = '恢复中…';
-  // ★ v3534：resume 实测 1.4 秒（冷缓存 + 需拉起守护），同 pause 放到 20 秒。
+  btn.disabled = true; btn.textContent = 'Resuming...';
   exec("sh " + BIN + " resume", 20000).then(function(r){
-    btn.disabled = false; btn.textContent = '恢复加速';
+    btn.disabled = false; btn.textContent = 'Resume Boost';
     if (r.code === 0){
-      toast('已恢复加速', 'ok');
+      toast('Boost resumed', 'ok');
       afterSave();
     } else {
-      toast('恢复失败：' + ((r.stderr || r.stdout || '').trim() || ('code ' + r.code)), 'hot');
+      toast('Resume failed: ' + ((r.stderr || r.stdout || '').trim() || ('code ' + r.code)), 'hot');
     }
   }, function(){
-    btn.disabled = false; btn.textContent = '恢复加速';
-    toast('恢复失败：与模块通信异常', 'hot');
+    btn.disabled = false; btn.textContent = 'Resume Boost';
+    toast('Resume failed: module communication error', 'hot');
   });
 }
 
@@ -4754,54 +4616,39 @@ function renderSegHint(d){
 
   var finalVal = Math.min(segVal, effGate);
 
-  var who = (segVal <= effGate) ? '本段值' : '总闸×降额';
+  var who = (segVal <= effGate) ? 'segment value' : 'limit x derate';
 
   var html = '';
   if (seg){
-    html += '当前 <b>' + soc + '%</b> 落在 <b>' + escapeHtml(segLabel(b, seg)) +
-      '</b> 段，该段申请 <b>' + segVal + ' mA</b>。<br>';
+    html += 'At <b>' + soc + '%</b> (<b>' + escapeHtml(segLabel(b, seg)) +
+      '</b>), segment requests <b>' + segVal + ' mA</b>.<br>';
   } else if (!isNaN(soc)){
-    html += '当前 <b>' + soc + '%</b> 不在任何生效区间（模块此时不干预）。<br>';
+    html += 'At <b>' + soc + '%</b>, SOC is outside active range (idle).<br>';
   }
-  html += '最终注入 ≈ <b>' + finalVal + ' mA</b>' +
-    '（受' + who + '限制）';
+  html += 'Effective inject ~ <b>' + finalVal + ' mA</b>' +
+    ' (capped by ' + who + ')';
 
   if (d.thermState > 0 && d.thermState !== null && d.thermState !== undefined){
-    html += '<br><span style="color:var(--warn,#d97706)">温度已进入降额档，' +
-      '总闸被压到 ' + effGate + ' mA</span>';
+    html += '<br><span style="color:var(--warn,#d97706)">Thermal derating active; ' +
+      'limit throttled to ' + effGate + ' mA</span>';
   }
 
   if (el.innerHTML !== html) el.innerHTML = html;
 }
 
-// 用一份数据点亮界面，并顺手存一份本地快照供下次秒开。
 function applyData(d){
   var first = !STATE.data;
 
-  // ★ v3533：原厂档(3) 的档位显示由前端钉住。
-  //   【为什么】切 3 会杀掉守护进程，status.json 从此冻结不再更新，
-  //   里面的 active 永远是切档前那个值（通常是 1）。每 2 秒轮询读到的
-  //   都是它，renderTabs 就会把界面上已经切好的选中态刷回去。
-  //   这是「点了原厂、界面跳回激进、过好久才对」的根因。
-  //   守护已停 = 没有任何其它数据源能反映真实档位，只有用户刚才那一次
-  //   点击是权威的，所以这里以 pinActive 覆盖后端回报值。
-  // ★ v3533：原厂档(3) 的档位显示兜底钉住（带 8 秒有效期）。
-  //   【为什么还要钉】后端 v3533 已在 profile write 里主动重写 status.json，
-  //   正常情况下前端 2 秒内读到的就是真值（active=3 / running=false）。
-  //   钉只覆盖「那次写入失败 / 用户点得太快」这一小段窗口。
-  //   必须先判过期，否则用户之后在终端手动切回 1/2 档，界面会永远卡在原厂。
   if (STATE.pinActive !== null && Date.now() > STATE.pinUntil){
     STATE.pinActive = null;
   }
   if (STATE.pinActive !== null && d && d.active !== STATE.pinActive){
     d = Object.assign({}, d, {
       active: STATE.pinActive,
-      // 守护已停 → 这几个字段必须一起改，否则界面会出现
-      // 「原厂档」+「加速生效中」+「intervening:true」的自相矛盾。
       running: false,
       paused: false,
       intervening: false,
-      whyInactive: '原厂档：模块已停止干预，充电控制权已交回系统。'
+      whyInactive: 'Stock profile: module stopped, charging managed by system.'
     });
   }
 
@@ -4850,9 +4697,9 @@ function tick(){
       //   只保留一个可复制的命令，方便反馈问题时贴出来。
       var msg = (e && e.message) ? e.message : String(e);
       if (/getjson/.test(msg) === false){
-        msg += '\n\n方便排查的话，把这条命令的输出发我：\nsh ' + BIN + ' getjson';
+        msg += '\n\nRun this to inspect:\nsh ' + BIN + ' getjson';
       }
-      showErr('读取数据失败：\n' + msg);
+      showErr('Failed to read status:\n' + msg);
     }
     var dot = $('dotSvc');
     if (dot) dot.className = 'dot2 off';
@@ -4907,75 +4754,44 @@ function switchProfile(a){
     //   不是"原厂实际会申请的电流"。写额度 = 把申请顶格，
     //   这不是"交还系统"，反而比原厂更激进。
     //   真正的原厂 = 模块干预【之前】驱动自己设的那个值。
-    askConfirm('切换到「原厂档」将停止加速，并把充电控制权交还系统。\n\n' +
-      '模块会依次尝试：\n' +
-      '1. 写回模块干预前的节点原值（这才是出厂原值）\n' +
-      '2. 无原值备份时，写回设备树档位表的申请额度（会明确标注）\n' +
-      '3. 以上都不可用时，回退到兜底安全值\n\n' +
-      '确认后守护进程会退出，不再主动写节点。确定吗？',
+    askConfirm('Switch to Stock profile? This stops boosting and returns control to the system.\n\n' +
+      'The module will restore charging current in order:\n' +
+      '1. Restore original backed-up node value (factory state)\n' +
+      '2. Fallback to DT table request limit if backup missing\n' +
+      '3. Fallback to safe default value\n\n' +
+      'The daemon will exit and stop writing. Continue?',
       function(){ doSwitchProfile(3); },
-      { ok: '切换', cancel: '取消', danger: true });
+      { ok: 'Switch', cancel: 'Cancel', danger: true });
     return;
   }
   doSwitchProfile(a);
 }
 
 function doSwitchProfile(a){
-  var NAMES = {1:'激进档', 2:'温和档', 3:'原厂档'};
+  var NAMES = {1:'Aggressive', 2:'Balanced', 3:'Stock'};
 
-  // ★ v3533：一进来就先解除钉住。
-  //   用户的每一次点击都是新的意图，旧的 pinActive 必须作废，
-  //   否则切回 1/2 档后界面还钉在 3 上，守护报回来的真值永远显示不出来。
-  //   放在最前面（而不是成功回调里）：万一这一步失败，用户看到的是
-  //   「切换失败」并把选中态撤回，此时解除钉住也是正确行为。
   STATE.pinActive = null;
 
-  // ---- 乐观 UI：立刻把选中态切过去 ----
-  // 【为什么要这样做】切回激进/温和时脚本要重新拉起守护进程，
-  //   守护首轮采样 + 热重载约需 2 秒。这期间若界面不及时反馈，
-  //   用户会以为"又没生效"并反复点击（容易点出多档位并发写入）。
-  //   所以先把选中态画上，再用真实数据校正。
   setActiveTab(a);
-  toast('切换中…');
+  toast('Switching...');
 
-  // ★ v3533：切档超时从默认 6 秒放大到 20 秒。
-  //   【为什么】exec() 默认 TO=6000，而切原厂档(3)这条路径要做：
-  //     save_profile -> restore_to_system -> vot_release -> sweep_instances
-  //     -> kill 守护 -> rm pidfile -> rm run/launch 锁
-  //   其中 sweep_instances 要等守护进程真正退出；充电时 do_once 一轮
-  //   可能跑 5~15 秒，顶到 6 秒上限就被判 timeout —— 前端看到的是
-  //   「恢复失败：与模块通信异常」或按钮永远停在「恢复中…」，即"卡死"。
   exec("sh " + BIN + " profile write " + a, 20000).then(function(r){
     var out = (r.stdout || '').trim();
-    // 成功判定：脚本约定输出含 "已切换"。同时兼容退出码 0。
-    var okFlag = (r.code === 0) && (out.indexOf('已切换') >= 0);
+    // Success contract: vfcs_boost prints "Switched to: ..."
+    var okFlag = (r.code === 0) && (out.indexOf('Switched to:') >= 0);
 
-    // 超时也按成功处理：脚本侧可能已经写完了 profile，只是回调没等到。
-    //   此时强报失败反而误导（用户会重试，多打一次；而 profile 已是目标档）。
-    //   下面统一走「以后端 profile 为准」的收敛路径重新对齐选中态。
     var timedOut = (r.code !== 0) && /timeout/i.test(out + ' ' + (r.stderr || ''));
 
     if (okFlag || timedOut){
-      toast(timedOut ? ('已切换到 ' + NAMES[a] + '（响应较慢，已按本地状态显示)')
-                     : ('已切换到 ' + NAMES[a]), 'ok');
+      toast(timedOut ? ('Switched to ' + NAMES[a] + ' (slow reply; local state updated)')
+                     : ('Switched to ' + NAMES[a]), 'ok');
     } else {
-      // 失败：把乐观选中态撤回
       if (STATE.data) setActiveTab(STATE.data.active);
-      toast('切换失败：' + (r.stderr || out || ('code ' + r.code)), 'err');
+      toast('Switch failed: ' + (r.stderr || out || ('code ' + r.code)), 'err');
       return;
     }
 
-    // ★ v3533：原厂档(3) 与 1/2 档的收敛路径【必须分开】。
-    //   【为什么】切 3 会把守护进程杀掉，status.json 从此【冻结不再更新】
-    //   （它的唯一写入者就是守护的 do_once）。此时再怎么 tick() 读到的
-    //   都是切档前那份旧快照（active=1），renderTabs 会拿它把刚画的
-    //   选中态刷回去 —— 这就是"点了原厂又跳回激进、要等好久才对"的根因。
-    //   1/2 档相反：守护会被重新拉起，status.json 很快就是新值，
-    //   所以必须 forceLive 直读，否则会短暂显示旧档。
     if (a === 3){
-      // 后端已在 profile write 里写过真值 status.json，正常情况下下一轮轮询
-      //   就能读到 active=3。这里设一个 8 秒兜底钉住，覆盖那次写入失败
-      //   或前端抢在写入前轮询的极小窗口。
       STATE.pinActive = 3;
       STATE.pinUntil = Date.now() + 8000;
       setActiveTab(3);
@@ -4984,35 +4800,26 @@ function doSwitchProfile(a){
         STATE.data.running = false;
         STATE.data.paused = false;
         STATE.data.intervening = false;
-        STATE.data.whyInactive = '原厂档：模块已停止干预，充电控制权已交回系统。';
+        STATE.data.whyInactive = 'Stock profile: module stopped, charging managed by system.';
       }
-      // 立刻抢一次真值（后端刚写完，此时读到的应该已经是 3）
       STATE.forceLive = true;
       STATE.lastCal = null;
       tick();
       return;
     }
 
-    // ---- 1/2 档：守护会被拉起，status.json 会自己更新 ----
-    // 【必须强制现场直读】
-    //   刚写完 profile，守护的 status.json 快照还是上一轮（最多滞后 2 秒）。
-    //   若这里走缓存，renderTabs 会拿旧 active 把上面刚画的选中态**刷回去**，
-    //   看起来就是"切了档又弹回旧档 / 要切几次页面才对"——
-    //   这正是"档位切换刷新不及时"的根因。
     STATE.forceLive = true;
     STATE.lastCal = null;
     tick();
 
-    // 守护需约 2 秒重启采样，补一次刷新让状态跟上。
-    // 此时守护已跑过一轮，走缓存即可（不要再 forceLive，避免白付慢路径开销）。
     setTimeout(function(){ STATE.lastCal = null; tick(); }, 2500);
   }).catch(function(e){
     if (STATE.data) setActiveTab(STATE.data.active);
-    toast('切换失败：' + (e && e.message ? e.message : e), 'err');
+    toast('Switch failed: ' + (e && e.message ? e.message : e), 'err');
   });
 }
 
-// 只更新档位 tab 的选中态（不碰其他 DOM，供乐观 UI 用）
+// Optimistic tab highlight
 function setActiveTab(a){
   var tabs = document.querySelectorAll('.tab');
   for (var i = 0; i < tabs.length; i++){
@@ -5022,14 +4829,12 @@ function setActiveTab(a){
 }
 
 function doSaveCal(keys){
-  // 统一走 runJobs：一次 setcal 批量写入，5 段档位只 fork 1 次。
-  // 失败时 onDone(false) 不触发回调，dirty 保留、按钮恢复可点，可直接重试。
   var jobs = [];
   for (var n = 0; n < keys.length; n++){
     jobs.push([keys[n], STATE.dirty[keys[n]], keys[n]]);
   }
-  runJobs(jobs, $('btnSave'), '保存修改', function(){
-    toast('已保存 ' + keys.length + ' 项修改', 'ok');
+  runJobs(jobs, $('btnSave'), 'Save Segments', function(){
+    toast('Saved ' + keys.length + ' change(s)', 'ok');
     STATE.dirty = null;
     STATE.editing = false;
     STATE.lastCal = null;
@@ -5254,22 +5059,21 @@ function bind(){
       $('btnVotSave').disabled = false;
       // 开启 voter 是有风险的动作，必须二次确认
       if (val === 1){
-        askConfirm('开启硬件直控？\n\n' +
-          '开启后本模块将【不再】走系统申请通道，改为由模块直接决定充电电流。\n\n' +
-          '· 该方式没有系统二次校验兜底，风险高于常规模式\n' +
-          '· 建议先把电流总闸调低一些验证\n\n' +
-          '确定开启吗？',
+        askConfirm('Enable hardware direct control?\n\n' +
+          'The module will bypass system request scheduling and directly force DCHG_FCC current.\n\n' +
+          '- No system secondary verification safeguard\n' +
+          '- Recommended to test with a lower Total Current Limit first\n\n' +
+          'Enable now?',
           function(){ doSaveVoter(); },
-          { ok: '开启', cancel: '取消', danger: true });
+          { ok: 'Enable', cancel: 'Cancel', danger: true });
       }
     });
   }
-  // 数值输入 + 保存/恢复按钮
+  // Numeric input + blur handlers
   for (i = 0; i < VOT_KEYS.length; i++){
     var el = $(VOT_KEYS[i]);
     if (!el) continue;
     el.addEventListener('input', onVotInput);
-    // ★ v3578：越界提示只在失焦时给一次，不再打字过程中打断
     el.addEventListener('blur', onVotBlur);
   }
   $('btnVotSave').addEventListener('click', doSaveVoter);
@@ -5283,12 +5087,9 @@ function bind(){
         setPillRow('thermEnRow', 'data-te', String(val));
         var _tbs2 = document.getElementById('btnSafeSave'); if (_tbs2) _tbs2.disabled = false;
       };
-      // 关闭温控是"降低保护"的动作：先确认，确认后才改界面，
-      //   避免"取消后药丸已切到关闭、与真实状态不符"。
       if (val === 0){
-        askConfirm('关闭温控？\n\n所有温度保护线将失效，电流只按 SOC 表申请，' +
-          '高温下可能触发内核 80℃ 硬切快充（功率断崖）。\n\n确定关闭吗？',
-          apply, { ok: '确定关闭', cancel: '取消', danger: true });
+        askConfirm('Disable thermal control?\n\nAll temperature limits will be ignored and charging may hit kernel 80°C hard cutoff.\n\nDisable anyway?',
+          apply, { ok: 'Disable', cancel: 'Cancel', danger: true });
       } else {
         apply();
       }
@@ -5299,22 +5100,12 @@ function bind(){
   $('thermStop').addEventListener('input', onThermInput);
   $('thermStop').addEventListener('blur', onThermBlur);
 
-  // ★ v3536：停止介入电量滑动条。
-  //   用 input（拖动即时触发）而不是 change（松手才触发），
-  //   这样拖动时右上角数字和提示文案能实时跟随。
   if ($('socStop')) $('socStop').addEventListener('input', onSocStopInput);
 
-  // v3562: safeEnRow（防掉档开关）已移除，不再绑定点击事件。
   $('safeCap').addEventListener('input', onSafeInput);
   $('safeCap').addEventListener('blur', onSafeBlur);
   $('btnSafeSave').addEventListener('click', doSaveSafe);
 
-  // ★ v3537：分段表保存按钮。
-  //   【为什么必须判空】v3526 到 v3536 这段期间 UI 被摘掉、btnSave 不存在。
-  //   现在表回来了，按钮也在，但仍保留判空 —— 万一以后又调整布局，
-  //   不至于整个 init 抛异常把后面所有绑定都带走。
-  //   【提交哪些键】只提交 dirty 里实际改过的段，没改的不动，
-  //   避免"改一段把五段全写一遍"造成无意义的 profile 重写（会触发守护热重载）。
   if ($('btnSave')){
     $('btnSave').addEventListener('click', function(){
       if (!STATE.dirty) return;
@@ -5337,8 +5128,8 @@ function bind(){
 function boot(){
   BRIDGE = detectBridge();
   if (BRIDGE !== 'ksu'){
-    showErr('当前不在 KernelSU 管理器内打开，只能预览界面，无法读写配置。\n' +
-            '请到 KernelSU 管理器的模块页面打开本界面。');
+    showErr('Not running inside KernelSU Manager (preview mode; settings cannot be saved).\n' +
+            'Open this page from the Modules tab in KernelSU Manager.');
   }
   bind();
   initMiui();                // ★ v3.2.9：底部导航 + 大标题收缩
